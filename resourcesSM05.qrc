@@ -1,0 +1,9 @@
+<RCC>
+    <qresource prefix="/images">
+        <file>BackgroundsFP2000/WB00760L.GIF</file>
+        <file>Tesla/tesla_m_S02_yellowAFC01.png</file>
+        <file>Tesla/smile0.webp</file>
+        <file>Tesla/teslaMS.png</file>
+        <file>Tesla/tesla_m_s.gif</file>
+    </qresource>
+</RCC>
