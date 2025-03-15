@@ -60,7 +60,7 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
-    DBFacade dbFacade;
+    DBFacade *dbFacade;
     CheckinServices ChServices;
     CreateTasks num_cur_task;
     QWidget* previousCentralWidget=new QWidget;
@@ -88,7 +88,7 @@ private:
     QLabel* Label[maximumNumberlabel];
     QMovie *movie = new QMovie(this);
     StretchLabel *stretchLabel = new StretchLabel(this);
-    CalculateGrade *calckgrade;
+    CalculateGrade *calckgrade= new CalculateGrade();
 
 
 private slots:

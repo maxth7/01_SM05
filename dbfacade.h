@@ -11,9 +11,13 @@ class DBFacade : public QObject{
     Q_OBJECT
 public:
     DBFacade();
+
     ~DBFacade();
 
-    bool openDatabaseQPSQL();
+    //bool openDatabaseQPSQL();
+    bool openDatabaseQPSQL(const QString &host, const QString &dbName,
+                           const QString &user, const QString &password,
+                           int port);
 
     QString getValueDatabaseQPSQL(const QString &fieldName,
                                   const QString &tableName,
@@ -32,9 +36,11 @@ public:
                                       const QString &tableName,
                                       const QString &condition);
 
-protected:
+// protected:
+//     QSqlDatabase m_db;
+//     QSqlQuery *m_query;
+private:
     QSqlDatabase m_db;
-    QSqlQuery *m_query;
-
+    std::unique_ptr<QSqlQuery> m_query; // Используем умный указатель
 };
 #endif // DBFACADE_H

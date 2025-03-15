@@ -4,7 +4,9 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
+    ,dbFacade(new DBFacade())
 {
+
     ui->setupUi(this);
     setCentralWidget(ui->centralwidget);
 
@@ -90,7 +92,9 @@ void MainWindow::setupMenuBar() {
 }
 void MainWindow::setupStatusBar() {
     //5 не проверяю открыта ли бд------------------------------
-    if(!dbFacade.openDatabaseQPSQL()){
+    //if(!dbFacade().openDatabaseQPSQL()){
+    if (!dbFacade->openDatabaseQPSQL("localhost", "iSmile", "postgres",
+                                    "800900", 5432)) {
         QString msg = "Невозможно открыть БД.";
         QMessageBox::critical(nullptr, "Ошибка", "Не удалось запустить приложение. " + msg);
         Label[1]->setText(msg);
@@ -101,7 +105,7 @@ void MainWindow::setupStatusBar() {
     QString tableName = "tasks";
     QString fieldName = "task";
 
-    QString htmlValue=dbFacade.getValueDatabaseQPSQL(fieldName,
+    QString htmlValue=dbFacade->getValueDatabaseQPSQL(fieldName,
                                                        tableName,
                                                        condition);
     QString q1 ="<!--<body background=";
@@ -146,7 +150,7 @@ void MainWindow::getListThemes(){
     QString fieldName = "task";
     QString condition="";
     QStringList stringList;
-    stringList=dbFacade.getRecordsDatabaseQPSQL(fieldName,
+    stringList=dbFacade->getRecordsDatabaseQPSQL(fieldName,
                                                 tableName,
                                                 condition);
 
@@ -335,7 +339,7 @@ void MainWindow::testing_clicked(){
     QString fieldName = "task";
 
 
-    QString htmlValue=dbFacade.getValueDatabaseQPSQL(fieldName,
+    QString htmlValue=dbFacade->getValueDatabaseQPSQL(fieldName,
                                                      tableName,
                                                      condition);
     htmlValue = htmlValue.simplified();
@@ -797,7 +801,7 @@ void MainWindow::testGrade(){
     QString condition=" Where figure="+sGrade;
     QString tableName = "grade";
     QString fieldName ="*";
-    QByteArray imageData=dbFacade.getGradeDatabaseQPSQL(fieldName,tableName,condition);
+    QByteArray imageData=dbFacade->getGradeDatabaseQPSQL(fieldName,tableName,condition);
     if (!imageData.isEmpty()) {
         loadImageData(imageData);
     } else {
@@ -900,6 +904,13 @@ void MainWindow::closeEvent(QCloseEvent* event) {
 
 MainWindow::~MainWindow(){
     delete ui;
+    delete dbFacade; // Освобождаем память
+    for (int i = 0; i < maximumNumberlabel; ++i) {
+        delete Label[i]; // Освобождаем память для каждого QLabel, если они были созданы с помощью new
+    }
+    delete calckgrade;
+    qDeleteAll(savedWidgets); // Освобождает память для всех виджетов в списке
+    savedWidgets.clear(); // Очищает список
 }
 
 
@@ -910,11 +921,11 @@ void MainWindow:: loadBrowser(QTextBrowser* textBrowser,
                               QString fieldNameImageData,
                               QString tableNameGraph,
                               QString condition ){
-    QStringList stringListFileName =dbFacade.getFileNameQPSQL(
+    QStringList stringListFileName =dbFacade->getFileNameQPSQL(
                                             fieldNameFileGraph,
                                             tableNameGraph,
                                             condition);
-    QList<QByteArray> stringListImageData =dbFacade.getFileImageDataQPSQL(
+    QList<QByteArray> stringListImageData =dbFacade->getFileImageDataQPSQL(
                                             fieldNameImageData,
                                             tableNameGraph,
                                             condition);
@@ -924,7 +935,7 @@ void MainWindow:: loadBrowser(QTextBrowser* textBrowser,
               stringListImageData,
               dirName) ;
     condition="";
-    QString htmlValue=dbFacade.getValueDatabaseQPSQL(fieldNameHtm,
+    QString htmlValue=dbFacade->getValueDatabaseQPSQL(fieldNameHtm,
                                                      tableNameHtm,
                                                      condition);
 
@@ -1023,11 +1034,11 @@ void MainWindow::uploadingGraphFiles2(QString fieldNameFileGraph,
                                       QString fieldNameImageData,
                                       QString tableNameGraph,
                                       QString condition ){
-    QStringList stringListFileName =dbFacade.getFileNameQPSQL(
+    QStringList stringListFileName =dbFacade->getFileNameQPSQL(
         fieldNameFileGraph,
         tableNameGraph,
         condition);
-    QList<QByteArray> stringListImageData =dbFacade.getFileImageDataQPSQL(
+    QList<QByteArray> stringListImageData =dbFacade->getFileImageDataQPSQL(
         fieldNameImageData,
         tableNameGraph,
         condition);

@@ -1,32 +1,61 @@
 #include "dbfacade.h"
 
+// DBFacade::DBFacade() {
+//     m_db =QSqlDatabase::addDatabase("QPSQL");
+//     m_query = new QSqlQuery();
+// }
+// DBFacade::~DBFacade() {
+//     if (m_db.isOpen()) {
+//         m_db.close();
+//     }
+//     delete m_query;
+// }
 DBFacade::DBFacade() {
-    m_db =QSqlDatabase::addDatabase("QPSQL");
-    m_query = new QSqlQuery();
-}
 
-bool  DBFacade:: openDatabaseQPSQL(){
+    m_db = QSqlDatabase::addDatabase("QPSQL");
 
-    m_db.setHostName("localhost");
-    m_db.setDatabaseName("iSmile");
-
-    m_db.setUserName("postgres");
-    m_db.setPassword("800900");
-    m_db.setPort(5432);
-
-    if (!m_db.open()) {
-       qDebug() << "Ошибка при открытии базы данных:" << m_db.lastError().text();
-       return false;
-    }else {
-        return true;
-    }
+    m_query = std::make_unique<QSqlQuery>();
 }
 
 DBFacade::~DBFacade() {
     if (m_db.isOpen()) {
         m_db.close();
     }
-    delete m_query;
+}
+
+
+// bool  DBFacade:: openDatabaseQPSQL(){
+
+//     m_db.setHostName("localhost");
+//     m_db.setDatabaseName("iSmile");
+
+//     m_db.setUserName("postgres");
+//     m_db.setPassword("800900");
+//     m_db.setPort(5432);
+
+//     if (!m_db.open()) {
+//        qDebug() << "Ошибка при открытии базы данных:" << m_db.lastError().text();
+//        return false;
+//     }else {
+//         return true;
+//     }
+// }
+
+bool DBFacade::openDatabaseQPSQL(const QString &host, const QString &dbName,
+                                 const QString &user, const QString &password, int port) {
+    m_db.setHostName(host);
+    m_db.setDatabaseName(dbName);
+    m_db.setUserName(user);
+    m_db.setPassword(password);
+    m_db.setPort(port);
+
+
+    if (!m_db.open()) {
+        qDebug() << "Ошибка при открытии базы данных:" << m_db.lastError().text();
+        return false;
+    }else {
+        return true;
+    }
 }
 
 
@@ -69,7 +98,7 @@ QStringList DBFacade:: getRecordsDatabaseQPSQL(const QString &fieldName,
         return stringList;
     }
 
-    QString query = QString("SELECT %1 FROM %2 ORDER BY n ASC %3").
+    QString query = QString("SELECT %1 FROM %2 %3 ORDER BY n ASC").
                     arg(fieldName,
                         tableName,
                         condition);
