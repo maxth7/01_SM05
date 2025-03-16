@@ -105,9 +105,13 @@ void MainWindow::setupStatusBar() {
     QString tableName = "tasks";
     QString fieldName = "task";
 
-    QString htmlValue=dbFacade->getValueDatabaseQPSQL(fieldName,
-                                                       tableName,
-                                                       condition);
+    // QString htmlValue=dbFacade->getValueDatabaseQPSQL(fieldName,
+    //                                                    tableName,
+    //                                                    condition);
+    QString htmlValue = dbFacade->getValueFromDB<QString>(fieldName,
+                                                          tableName,
+                                                          condition);
+
     QString q1 ="<!--<body background=";
     int index = htmlValue.indexOf(q1);
 
@@ -339,9 +343,12 @@ void MainWindow::testing_clicked(){
     QString fieldName = "task";
 
 
-    QString htmlValue=dbFacade->getValueDatabaseQPSQL(fieldName,
-                                                     tableName,
-                                                     condition);
+    // QString htmlValue=dbFacade->getValueDatabaseQPSQL(fieldName,
+    //                                                  tableName,
+    //                                                  condition);
+    QString htmlValue = dbFacade->getValueFromDB<QString>(fieldName,
+                                                          tableName,
+                                                          condition);
     htmlValue = htmlValue.simplified();
     readStyleSheet(htmlValue);
 
@@ -800,8 +807,9 @@ void MainWindow::testGrade(){
 
     QString condition=" Where figure="+sGrade;
     QString tableName = "grade";
-    QString fieldName ="*";
-    QByteArray imageData=dbFacade->getGradeDatabaseQPSQL(fieldName,tableName,condition);
+    QString fieldName ="graph";//"*";
+
+    QByteArray imageData = dbFacade->getValueFromDB<QByteArray>(fieldName,tableName,condition);
     if (!imageData.isEmpty()) {
         loadImageData(imageData);
     } else {
@@ -921,23 +929,26 @@ void MainWindow:: loadBrowser(QTextBrowser* textBrowser,
                               QString fieldNameImageData,
                               QString tableNameGraph,
                               QString condition ){
-    QStringList stringListFileName =dbFacade->getFileNameQPSQL(
+
+    QStringList stringListFileName = dbFacade->getListFromDB<QString>(
                                             fieldNameFileGraph,
                                             tableNameGraph,
                                             condition);
-    QList<QByteArray> stringListImageData =dbFacade->getFileImageDataQPSQL(
-                                            fieldNameImageData,
-                                            tableNameGraph,
-                                            condition);
+
+    QList<QByteArray> stringListImageData = dbFacade->getListFromDB<QByteArray>(
+                                                fieldNameImageData,
+                                                tableNameGraph,
+                                                condition);
     QString dirName=state.pathGraph;//+"/";
 
     saveFiles(stringListFileName,
               stringListImageData,
               dirName) ;
     condition="";
-    QString htmlValue=dbFacade->getValueDatabaseQPSQL(fieldNameHtm,
-                                                     tableNameHtm,
-                                                     condition);
+
+    QString htmlValue = dbFacade->getValueFromDB<QString>(fieldNameHtm,
+                                                          tableNameHtm,
+                                                          condition);
 
     QString fullHtml=num_cur_task.insertPath(htmlValue, state.pathGraph);
 
@@ -1034,14 +1045,15 @@ void MainWindow::uploadingGraphFiles2(QString fieldNameFileGraph,
                                       QString fieldNameImageData,
                                       QString tableNameGraph,
                                       QString condition ){
-    QStringList stringListFileName =dbFacade->getFileNameQPSQL(
-        fieldNameFileGraph,
-        tableNameGraph,
-        condition);
-    QList<QByteArray> stringListImageData =dbFacade->getFileImageDataQPSQL(
-        fieldNameImageData,
-        tableNameGraph,
-        condition);
+
+    QStringList stringListFileName = dbFacade->getListFromDB<QString>(
+                                                fieldNameFileGraph,
+                                                tableNameGraph,
+                                                condition);
+    QList<QByteArray> stringListImageData = dbFacade->getListFromDB<QByteArray>(
+                                                fieldNameImageData,
+                                                tableNameGraph,
+                                                condition);
     QString dirName=state.pathGraph;//+"/";
 
     saveFiles(stringListFileName,
