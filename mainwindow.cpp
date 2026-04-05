@@ -85,14 +85,12 @@ void MainWindow::setupMenuBar() {
         "   border: 2px solid #FF0000;"
         "}"
         );
-    connect(ui->pushButtonNext, &QPushButton::clicked, this, &MainWindow::pushButtonNext_clicked);
-    connect(ui->pushButtonEndTest, &QPushButton::clicked, this, &MainWindow::pushButtonEndTest_clicked);
-    connect(ui->pushButtonPrevious, &QPushButton::clicked, this, &MainWindow::pushButtonPrevious_clicked);
-    connect(ui->pushButtonTestBreak, &QPushButton::clicked, this, &MainWindow::testBreak_clicked);
+    connect(ui->pushButtonNext, &QPushButton::clicked, this, &MainWindow::onPushButtonNextClicked);
+    connect(ui->pushButtonEndTest, &QPushButton::clicked, this, &MainWindow::onPushButtonEndTestClicked);
+    connect(ui->pushButtonPrevious, &QPushButton::clicked, this, &MainWindow::onPushButtonPreviousClicked);
+    connect(ui->pushButtonTestBreak, &QPushButton::clicked, this, &MainWindow::onTestBreakClicked);
 }
 void MainWindow::setupStatusBar() {
-    //5 не проверяю открыта ли бд------------------------------
-    //if(!dbFacade().openDatabaseQPSQL()){
     if (!dbFacade->openDatabaseQPSQL("localhost", "iSmile", "postgres",
                                     "800900", 5432)) {
         QString msg = "Невозможно открыть БД.";
@@ -105,9 +103,6 @@ void MainWindow::setupStatusBar() {
     QString tableName = "tasks";
     QString fieldName = "task";
 
-    // QString htmlValue=dbFacade->getValueDatabaseQPSQL(fieldName,
-    //                                                    tableName,
-    //                                                    condition);
     QString htmlValue = dbFacade->getValueFromDB<QString>(fieldName,
                                                           tableName,
                                                           condition);
@@ -158,30 +153,44 @@ void MainWindow::getListThemes(){
                                                 tableName,
                                                 condition);
 
-    choosingTheme_clicked(stringList);
+    onChooseThemeClicked(stringList);
 }
-void MainWindow::choosingTheme_clicked(QStringList stringList){
-    QMenu* themeMenu = new QMenu(tr("Выбор темы"), this);
-    int Index=0;
-    for (const QString &theme : stringList) {
-        Index++;
-        QAction* themeAction = new QAction(theme, this);
-        themeMenu->addAction(themeAction);
 
-        connect(themeAction, &QAction::triggered, this, [this, theme,Index]() {
+void MainWindow::onChooseThemeClicked(const QStringList& stringList) {
+    QMenu themeMenu(tr("Выбор темы"), this);
 
-            QString submenu = theme;
-            changeTheme(submenu,Index);
-        });
+    for (int i = 0; i < stringList.size(); ++i) {
+        QAction* const themeAction = themeMenu.addAction(stringList[i]);
+
+        connect(themeAction, &QAction::triggered, this,
+                [this, theme = stringList[i], i]() {
+                    changeTheme(theme, i);  // индексация с 0
+                });
     }
-    themeMenu->exec(QCursor::pos());
+
+    themeMenu.exec(QCursor::pos());
     restoreTabsAndWidgets();
     hideTab(customTabAnime);
 }
 
-void MainWindow:: changeTheme(const QString &theme,int Index){
+void MainWindow::changeTheme(const QString& theme, int index) {
+    // Проверка валидности указателей
+    if (!Label[0] || !Label[1]) {
+        qDebug() << "changeTheme: Label[0] or Label[1] is nullptr";
+        return;
+    }
+
+    // Обновляем индекс первым (более критичное изменение)
+    selectedIndex = index;
+
+    // Обновляем UI
     Label[0]->setText(theme);
-    selectedIndex = Index;
+
+    // Форматируем строку времени
+    const QString timeString = (state.testExecutionTime > 0)
+                                   ? "Время теста: " + QString::number(state.testExecutionTime)
+                                   : "Время теста: не задано";
+    Label[1]->setText(timeString);
 }
 
 void MainWindow::saveTabsAndWidgets() {
@@ -316,9 +325,8 @@ void MainWindow::help_clicked(){
                 condition  );
 }
 
-void MainWindow::testing_clicked(){
-
-    tGrade=0;
+void MainWindow::testing_clicked() {
+    tGrade = 0;
 
     if (centralWidget() != ui->centralwidget) {
         setCentralWidget(ui->centralwidget);
@@ -336,40 +344,35 @@ void MainWindow::testing_clicked(){
     showButtonTest();
     hideTab(ui->tabTest);
 
-    ui->tabWidget-> show();
+    ui->tabWidget->show();
 
-    QString condition=" Where n="+QString::number(selectedIndex);
-    QString tableName = "tasks";
-    QString fieldName = "task";
+    const QString condition = " Where n=" + QString::number(selectedIndex);
+    const QString tableName = "tasks";
+    const QString fieldName = "task";
 
-
-    // QString htmlValue=dbFacade->getValueDatabaseQPSQL(fieldName,
-    //                                                  tableName,
-    //                                                  condition);
     QString htmlValue = dbFacade->getValueFromDB<QString>(fieldName,
                                                           tableName,
                                                           condition);
     htmlValue = htmlValue.simplified();
     readStyleSheet(htmlValue);
 
-    QString fieldNameHtm="task";
-    QString tableNameHtm="tasks";
-    QString fieldNameFileGraph="filename";
-    QString fieldNameImageData="graph";
-    QString tableNameGraph="graphtest";
-    condition="Where idtasks="+QString::number(selectedIndex);
+    const QString fieldNameHtm = "task";
+    const QString tableNameHtm = "tasks";
+    const QString fieldNameFileGraph = "filename";
+    const QString fieldNameImageData = "graph";
+    const QString tableNameGraph = "graphtest";
+    const QString conditionGraph = "Where idtasks=" + QString::number(selectedIndex);
 
     uploadingGraphFiles2(fieldNameFileGraph,
                          fieldNameImageData,
                          tableNameGraph,
-                         condition );
+                         conditionGraph);
 
+    num_cur_task.getTasks(htmlValue, state.pathGraph);
 
-    num_cur_task.getTasks(htmlValue,state.pathGraph);
-
-    int totalQuestion=num_cur_task.getTotalQwest();
+    const int totalQuestion = num_cur_task.getTotalQwest();
     ui->labelTaskNotComleted->setText("Не выполнено заданий: "
-                            +QString::number(totalQuestion-ready_madeTasks));
+                                      + QString::number(totalQuestion - ready_madeTasks));
     createInterface();
 }
 
@@ -445,7 +448,7 @@ void MainWindow::setupRadioButtons(int maxRadioBut) {
                                    "   height: 30px;"
                                    "}");
         layoutRadioButton->addWidget(radioButton);
-        connect(radioButton, &QRadioButton::clicked, this, &MainWindow::radioButtons_clicked);
+        connect(radioButton, &QRadioButton::clicked, this, &MainWindow::onRadioButtonClicked);
     }
 }
 void MainWindow::setupPushButtons(int maxPushButtons,int colCount) {
@@ -487,7 +490,7 @@ void MainWindow::setupPushButtons(int maxPushButtons,int colCount) {
         }
         pushButton[i]->setFixedSize(30, 30);
         pushButton[i]->setProperty("index", i);
-        connect(pushButton[i], &QPushButton::clicked, this, &MainWindow::pushButton_clicked);
+        connect(pushButton[i], &QPushButton::clicked, this, &MainWindow::onPushButtonClicked);
 
         layout->addWidget(pushButton[i], i / colCount, i % colCount);
 
@@ -531,103 +534,189 @@ void MainWindow::createLabelsForStatusbar(){
        }
 }
 
-void MainWindow::pushButton_clicked(){
-    QPushButton *clickedButton = qobject_cast<QPushButton*>(sender());
-
-    int numPreviousTask =num_cur_task.getNumTask();
-
-    if (clickedButton) {
-        QString buttonText = clickedButton->text();
-        int numCurrentTask=buttonText.toInt()-1;
-         num_cur_task.setNumTask(numCurrentTask);
-
-        showPushButtonTask(numCurrentTask,numPreviousTask );
-        uploadingBrowser();
-        showRadioButtonTask();
+void MainWindow::onPushButtonClicked() {
+    // 1. Проверяем отправителя
+    const QPushButton* clickedButton = qobject_cast<QPushButton*>(sender());
+    if (!clickedButton) {
+        qDebug() << "onPushButtonClicked: invalid sender()";
+        return;
     }
-}
 
-void MainWindow::pushButtonPrevious_clicked(){
-    int i_task=num_cur_task.getNumTask();
-    int num_previous_task =i_task;
-    i_task--;
-    num_cur_task.setNumTask(i_task);
-    i_task=num_cur_task.getNumTask();
-    showPushButtonTask(i_task,num_previous_task);
+    // 2. Проверяем текст кнопки
+    const QString buttonText = clickedButton->text();
+    bool conversionOk = false;
+    const int buttonNumber = buttonText.toInt(&conversionOk);
+
+    if (!conversionOk || buttonNumber <= 0) {
+        qDebug() << "onPushButtonClicked: invalid button text:" << buttonText;
+        return;
+    }
+
+    // 3. Получаем текущее состояние
+    const int numPreviousTask = num_cur_task.getNumTask();
+    int numCurrentTask = buttonNumber - 1;  // Конвертируем в 0-based индекс
+
+    // 4. Проверяем, что это действительно новое задание
+    if (numCurrentTask == numPreviousTask) {
+        return;  // Та же задача, ничего не делаем
+    }
+
+    // 5. Проверяем границы (если num_cur_task знает максимальное количество)
+    if (numCurrentTask < 0 || numCurrentTask >= num_cur_task.getTotalQwest()) {
+        qDebug() << "onPushButtonClicked: task index out of range:" << numCurrentTask;
+        return;
+    }
+
+    // 6. Обновляем состояние
+    num_cur_task.setNumTask(numCurrentTask);
+
+    // 7. Обновляем UI
+    showPushButtonTask(numCurrentTask, numPreviousTask);
     uploadingBrowser();
     showRadioButtonTask();
 }
 
-void MainWindow::pushButtonNext_clicked(){
-    int i_task=num_cur_task.getNumTask();
-    int num_previous_task =i_task;
-    i_task++;
-    num_cur_task.setNumTask(i_task);
-    i_task=num_cur_task.getNumTask();
+void MainWindow::onPushButtonPreviousClicked() {
+    // Получаем текущую задачу
+    const int currentTask = num_cur_task.getNumTask();
 
-     showPushButtonTask(i_task,num_previous_task );
-     uploadingBrowser();
-     showRadioButtonTask();
+    // Проверка на первую задачу
+    if (currentTask <= 0) {
+        qDebug() << "onPushButtonPreviousClicked: already at first task, currentTask =" << currentTask;
+
+        // Опционально: визуальная обратная связь для пользователя
+        QMessageBox::information(this, "Информация", "Это первое задание");
+        return;
+    }
+
+    // Вычисляем предыдущую задачу
+    // const int previousTask = currentTask - 1;
+     int previousTask = currentTask - 1;
+
+    // Дополнительная проверка валидности
+    const int totalTasks = num_cur_task.getTotalQwest();
+    if (previousTask >= totalTasks) {
+        qDebug() << "onPushButtonPreviousClicked: invalid task index" << previousTask;
+        return;
+    }
+
+    // Обновляем состояние
+    num_cur_task.setNumTask(previousTask);
+
+    // Обновляем UI
+    showPushButtonTask(previousTask, currentTask);
+    uploadingBrowser();
+    showRadioButtonTask();
 }
 
-void MainWindow:: showPushButtonTask(int num_current_task,int num_previous_task){
-    QString StyleSheet;
-    if(num_cur_task.saveTaskPushButton[num_previous_task]){
-        StyleSheet="QPushButton {"
-                "color:  black;"
-                "border-color: black;"
-                "background-color: #DDDDDD;"
-                "font-weight: bold;"
-                " padding: 2px 2px;"
-                " text-align: center;"
-                " text-decoration: none;"
-                " font-size: 16px;"
-                "}";
+void MainWindow::onPushButtonNextClicked() {
+    // Получаем текущий индекс
+    const int currentIndex = num_cur_task.getNumTask();
+    const int totalTasks = num_cur_task.getTotalQwest();
+
+    // Проверка, что не на последнем задании
+    if (currentIndex >= totalTasks - 1) {
+        qDebug() << "onPushButtonNextClicked: already at last task";
+
+        // Опционально: отключаем кнопку, если она есть
+        if (ui->pushButtonNext) {
+            ui->pushButtonNext->setEnabled(false);
+        }
+        return;
     }
-    else{
-    StyleSheet="QPushButton {"
-                "color:  black;"
-                "border-color:  black;"
-                "background-color: #4CAF50; "
-                "font-weight: bold;"
-                " padding: 2px 2px;"
-                " text-align: center;"
-                " text-decoration: none;"
-                " font-size: 16px;"
-                "}";
-  }
-    pushButton[num_previous_task]->setStyleSheet(StyleSheet);
+
+    // Вычисляем новый индекс
+    //const int newIndex = currentIndex + 1;
+    int newIndex = currentIndex + 1;
+
+    // Обновляем состояние
+    num_cur_task.setNumTask(newIndex);
+
+    // Обновляем интерфейс
+    showPushButtonTask(newIndex, currentIndex);
+    uploadingBrowser();
+    showRadioButtonTask();
+
+    // Включаем кнопку "Назад", если она была отключена
+    if (ui->pushButtonPrevious && !ui->pushButtonPrevious->isEnabled()) {
+        ui->pushButtonPrevious->setEnabled(true);
+    }
+}
+
+void MainWindow::showPushButtonTask(const int num_current_task, const int num_previous_task) {
+    // Получение общего количества задач
+    const int totalTasks = num_cur_task.getTotalQwest();
+
+    // Проверка границ
+    if (num_previous_task < 0 || num_previous_task >= totalTasks) {
+        qDebug() << "showPushButtonTask: invalid previous_task index =" << num_previous_task;
+        return;
+    }
+
+    if (num_current_task < 0 || num_current_task >= totalTasks) {
+        qDebug() << "showPushButtonTask: invalid current_task index =" << num_current_task;
+        return;
+    }
+
+    // Проверка существования кнопок
+    if (!pushButton[num_previous_task]) {
+        qDebug() << "showPushButtonTask: pushButton[" << num_previous_task << "] is nullptr";
+        return;
+    }
+
+    if (!pushButton[num_current_task]) {
+        qDebug() << "showPushButtonTask: pushButton[" << num_current_task << "] is nullptr";
+        return;
+    }
+
+    // Константные стили
+    const QString completedStyle = "QPushButton {"
+                                   "color: black;"
+                                   "border-color: black;"
+                                   "background-color: #DDDDDD;"
+                                   "font-weight: bold;"
+                                   "padding: 2px 2px;"
+                                   "text-align: center;"
+                                   "text-decoration: none;"
+                                   "font-size: 16px;"
+                                   "}";
+
+    const QString incompleteStyle = "QPushButton {"
+                                    "color: black;"
+                                    "border-color: black;"
+                                    "background-color: #4CAF50;"
+                                    "font-weight: bold;"
+                                    "padding: 2px 2px;"
+                                    "text-align: center;"
+                                    "text-decoration: none;"
+                                    "font-size: 16px;"
+                                    "}";
+
+    const QString currentTaskStyle = "QPushButton {"
+                                     "color: white;"
+                                     "border-color: red;"
+                                     "background-color: #4CAF50;"
+                                     "font-weight: bold;"
+                                     "padding: 2px 2px;"
+                                     "text-align: center;"
+                                     "text-decoration: none;"
+                                     "font-size: 16px;"
+                                     "}";
+
+    // Обновление предыдущей кнопки
+    const bool isPreviousCompleted = num_cur_task.saveTaskPushButton[num_previous_task];
+    pushButton[num_previous_task]->setStyleSheet(isPreviousCompleted ? completedStyle : incompleteStyle);
     pushButton[num_previous_task]->show();
 
-    if( num_cur_task.saveTaskPushButton[num_current_task]){
-
-       StyleSheet = "QPushButton {"
-                   "color: white;"
-                   "border-color: red;"
-                   "background-color: #DDDDDD;"
-                   "font-weight: bold;"
-                   "padding: 2px 2px;"
-                   "text-align: center;"
-                   "text-decoration: none;"
-                   "font-size: 16px;"
-                   "}";
+    // Обновление текущей кнопки
+    const bool isCurrentCompleted = num_cur_task.saveTaskPushButton[num_current_task];
+    if (isCurrentCompleted) {
+        pushButton[num_current_task]->setStyleSheet(completedStyle);
+    } else {
+        pushButton[num_current_task]->setStyleSheet(currentTaskStyle);
     }
-    else{
-       StyleSheet ="QPushButton {"
-                   "color: white;"
-                   "border-color: red;"
-                   "background-color: #4CAF50;"
-                   "font-weight: bold;"
-                   "padding: 2px 2px;"
-                   "text-align: center;"
-                   "text-decoration: none;"
-                   "font-size: 16px;"
-                "}";
-    }
-   pushButton[num_current_task]->setStyleSheet(StyleSheet);
-   pushButton[num_current_task]->show();
+    pushButton[num_current_task]->show();
 }
-
 void MainWindow:: deleteRadioButtonTask(){
 
     QVBoxLayout* layoutRadioButton = qobject_cast<QVBoxLayout*>(ui->frameRadioButton->layout());
@@ -667,7 +756,7 @@ void MainWindow:: showRadioButtonTask(){
                           "}");
        ui->frameRadioButton->layout()->addWidget(radioButtons[i]);
 
-       connect(radioButtons[i], &QRadioButton::clicked, this, &MainWindow::radioButtons_clicked);
+       connect(radioButtons[i], &QRadioButton::clicked, this, &MainWindow::onRadioButtonClicked);
 
        if(i==num_cur_task.saveAnswerRadioButton[numCurrentTask]-1){
             radioButtons[i]->setChecked(true);
@@ -675,65 +764,144 @@ void MainWindow:: showRadioButtonTask(){
    }
 }
 
-void MainWindow::uploadingBrowser(){
-    int numCurrentTask=num_cur_task.getNumTask();
-    QString html ="<b>Вопрос "+QString::number(numCurrentTask+1)
-                  +". </b>"+num_cur_task.ctest[numCurrentTask].saveQuest;
-    ui->textBrowserQwest->setHtml(html);
+void MainWindow::uploadingBrowser() {
+    // 1. Проверка валидности текущей задачи
+    const int numCurrentTask = num_cur_task.getNumTask();
+    const int totalTasks = num_cur_task.getTotalQwest();
 
-    html="";
-    for (int j = 0; j <num_cur_task.ctest[numCurrentTask].saveTotalAnswer; ++j) {
-
-        QString wordAnswer="<b>Ответ "+QString::number(j+1)+". ";
-        QString newAnswer= num_cur_task.ctest[numCurrentTask].saveAnswer[j];
-        newAnswer.replace("<b>",wordAnswer);
-        QString   htmlRight=newAnswer;
-        QString  htmlAnswerClear="";
-        QString answerInfoStart ="<b>";
-        int index = htmlRight.indexOf(answerInfoStart);
-
-        if (index != -1) {
-            htmlAnswerClear=htmlRight.remove(0, index);
-        }else{
-            QMessageBox::critical(this,
-                "Critical", "<b>Не найден тег /<b/> в ответе в процедуре uploadingBrowser</b>");
-            QCoreApplication::quit();
-        }
-        html=html+htmlAnswerClear;
+    if (numCurrentTask < 0 || numCurrentTask >= totalTasks) {
+        qDebug() << "uploadingBrowser: invalid task index" << numCurrentTask;
+        ui->textBrowserQwest->setHtml("<b>Ошибка: задача не найдена</b>");
+        ui->textBrowserAnser->setHtml("<b>Ошибка: задача не найдена</b>");
+        return;
     }
-    ui->textBrowserAnser->setHtml(html);
+
+    // 2. Проверка существования данных задачи
+    // if (numCurrentTask >= num_cur_task.ctest.size()) {
+     if (numCurrentTask >= MAX_TASK) {
+
+        qDebug() << "uploadingBrowser: ctest index out of range" << numCurrentTask;
+         return;
+     }
+
+    const auto& currentTest = num_cur_task.ctest[numCurrentTask];
+
+    // 3. Отображение вопроса
+    const QString questionHtml = "<b>Вопрос " + QString::number(numCurrentTask + 1) +
+                                 ". </b>" + currentTest.saveQuest;
+    ui->textBrowserQwest->setHtml(questionHtml);
+
+    // 4. Формирование ответов
+    QString answersHtml;
+    const int totalAnswers = currentTest.saveTotalAnswer;
+
+    for (int j = 0; j < totalAnswers; ++j) {
+        // Проверка границ массива ответов
+        //if (j >= currentTest.saveAnswer.size()) {
+        if (j >= MAX_ANSWER) {
+            qDebug() << "uploadingBrowser: saveAnswer index out of range" << j;
+            break;
+        }
+
+        QString answer = currentTest.saveAnswer[j];
+        const QString wordAnswer = "<b>Ответ " + QString::number(j + 1) + ". ";
+
+        // Безопасная замена тега
+        const QString answerFormatted = formatAnswerText(answer, wordAnswer);
+        answersHtml += answerFormatted;
+    }
+
+    ui->textBrowserAnser->setHtml(answersHtml);
 }
 
-void MainWindow::radioButtons_clicked(){
-    QRadioButton *clickedRadioButton = qobject_cast<QRadioButton*>(sender());
-    if (clickedRadioButton) {
-        QString buttonText = clickedRadioButton->text();
-        QString paleColor = "color: black;"
-                            "border-color: red;"
-                            "background-color: #DDDDDD;"
-                            "font-weight: bold;"
-                            "padding: 2px 2px;"
-                            "text-align: center;"
-                            "text-decoration: none;"
-                            "font-size: 16px;";
-       int num_current_task=num_cur_task.getNumTask();
-       pushButton[num_current_task]->setStyleSheet(paleColor);
-       num_cur_task.setNumTask(num_current_task);
-       if(!num_cur_task.saveTaskPushButton[num_current_task]){
-          ready_madeTasks++;
-          int totalQuestion=num_cur_task.getTotalQwest();
-          ui->labelTaskNotComleted->setText("Не выполнено заданий: "+QString::number(totalQuestion-ready_madeTasks));
+// Вспомогательная функция для форматирования ответа
+QString MainWindow::formatAnswerText(const QString& originalAnswer, const QString& answerPrefix) {
+    const QString answerInfoStart = "<b>";
+    const int index = originalAnswer.indexOf(answerInfoStart);
 
-          if(ready_madeTasks==totalQuestion){
-            ui->pushButtonEndTest->setVisible(true);
-          }
-       }
-       num_cur_task.saveTaskPushButton[num_current_task]=true;
-       num_cur_task.saveAnswerRadioButton[num_current_task]=buttonText.toInt();
+    if (index == -1) {
+        qDebug() << "formatAnswerText: Tag <b> not found in answer:" << originalAnswer;
+        return "<b>Ответ: [Ошибка форматирования]</b>";
     }
 
+    // Создаем копию и заменяем префикс
+    QString formattedAnswer = originalAnswer;
+    formattedAnswer.remove(0, index);
+    formattedAnswer.replace("<b>", answerPrefix);
+
+    return formattedAnswer;
+}
+
+
+
+
+
+void MainWindow::onRadioButtonClicked() {
+    // Проверка отправителя
+    const QRadioButton* clickedRadioButton = qobject_cast<QRadioButton*>(sender());
+    if (!clickedRadioButton) {
+        qDebug() << "radioButtons_clicked: invalid sender";
+        return;
+    }
+
+    // Проверка текста кнопки
+    const QString buttonText = clickedRadioButton->text();
+    bool ok = false;
+    const int answerValue = buttonText.toInt(&ok);
+    if (!ok) {
+        qDebug() << "radioButtons_clicked: invalid text format:" << buttonText;
+        return;
+    }
+
+    // Проверка текущей задачи
+    const int currentTask = num_cur_task.getNumTask();
+    const int totalTasks = num_cur_task.getTotalQwest();
+    if (currentTask < 0 || currentTask >= totalTasks) {
+        qDebug() << "radioButtons_clicked: invalid task index:" << currentTask;
+        return;
+    }
+
+    // Проверка указателя на кнопку
+    if (!pushButton[currentTask]) {
+        qDebug() << "radioButtons_clicked: pushButton is nullptr for task:" << currentTask;
+        return;
+    }
+
+    // Если задача уже выполнена - игнорируем повторное нажатие
+    if (num_cur_task.saveTaskPushButton[currentTask]) {
+        qDebug() << "radioButtons_clicked: task already completed:" << currentTask;
+        return;
+    }
+
+    // Отмечаем задачу как выполненную
+    const QString completedStyle = "color: black;"
+                                   "border-color: red;"
+                                   "background-color: #DDDDDD;"
+                                   "font-weight: bold;"
+                                   "padding: 2px 2px;"
+                                   "text-align: center;"
+                                   "text-decoration: none;"
+                                   "font-size: 16px;";
+    pushButton[currentTask]->setStyleSheet(completedStyle);
+
+    // Сохраняем ответ
+    num_cur_task.saveTaskPushButton[currentTask] = true;
+    num_cur_task.saveAnswerRadioButton[currentTask] = answerValue;
+    ready_madeTasks++;
+
+    // Обновляем счетчик
+    ui->labelTaskNotComleted->setText("Не выполнено заданий: " +
+                                      QString::number(totalTasks - ready_madeTasks));
+
+    // Показываем кнопку завершения, если все задачи выполнены
+    if (ready_madeTasks == totalTasks) {
+        ui->pushButtonEndTest->setVisible(true);
+    }
+
+    // Обновляем оценку
     testGrade();
 }
+
 void MainWindow::testGrade(){
    int numCurrentTask=num_cur_task.getNumTask();
    int selectedRadioButton=num_cur_task.saveAnswerRadioButton[numCurrentTask]-1;
@@ -790,40 +958,78 @@ void MainWindow::testGrade(){
     }
  }
 
- void MainWindow::pushButtonEndTest_clicked(){
+ void MainWindow::onPushButtonEndTestClicked() {
+     // Проверка таймера
+     if (timer) {
+         disconnect(timer, &QTimer::timeout, this, &MainWindow::updateProgress);
+     }
 
-    disconnect(timer, &QTimer::timeout, this, &MainWindow::updateProgress);
-    int totalQuestion=num_cur_task.getTotalQwest();
-    double tQuestion=static_cast<double>(totalQuestion);
-    double totalGrade=static_cast<double>(tGrade);
+     // Проверка необходимых объектов
+     if (!calckgrade || !dbFacade || !ui) {
+         QMessageBox::critical(this, "Ошибка", "Внутренняя ошибка приложения");
+         return;
+     }
 
-    QString sGrade=calckgrade->calculategrade(totalGrade,tQuestion);
+     // Получение и проверка данных
+     const int totalQuestion = num_cur_task.getTotalQwest();
+     if (totalQuestion <= 0) {
+         QMessageBox::critical(this, "Ошибка", "Некорректное количество вопросов");
+         return;
+     }
 
-    if(sGrade.length()>1){// errors /0 or totalGrade>tQuestion
+     const double totalQuestionDouble = static_cast<double>(totalQuestion);
+     const double totalGradeDouble = static_cast<double>(tGrade);
 
-        QMessageBox::critical(nullptr, "Ошибка", "Ошибка при  расчете оценки. "+sGrade);
-        return;
-    }
+     // Проверка диапазона оценки
+     if (totalGradeDouble < 0.0 || totalGradeDouble > totalQuestionDouble) {
+         QMessageBox::critical(this, "Ошибка",
+                               QString("Некорректная оценка: %1 из %2").arg(tGrade).arg(totalQuestion));
+         return;
+     }
 
-    QString condition=" Where figure="+sGrade;
-    QString tableName = "grade";
-    QString fieldName ="graph";//"*";
+     // Расчет оценки
+     const QString sGrade = calckgrade->calculategrade(totalGradeDouble, totalQuestionDouble);
 
-    QByteArray imageData = dbFacade->getValueFromDB<QByteArray>(fieldName,tableName,condition);
-    if (!imageData.isEmpty()) {
-        loadImageData(imageData);
-    } else {
-        qDebug() << "Image data is empty.";
-    }
-//================================================================
-    ui->menubar->show();
-    for (int i = 0; i < MAX_TASK; i++)  {
-        num_cur_task.saveTaskPushButton[i]=false;
-        num_cur_task.saveAnswerRadioButton[i]=0;
-    }
-    ready_madeTasks=0;
-    delFileDir(state.pathGraph);
+     // Проверка результата
+     if (sGrade.isEmpty() || sGrade.length() != 1 || !sGrade[0].isDigit()) {
+         QMessageBox::critical(this, "Ошибка",
+                               "Ошибка при расчете оценки: " + (sGrade.isEmpty() ? "пустой результат" : sGrade));
+         return;
+     }
+
+     // Получение изображения
+     const QString condition = " Where figure=" + sGrade;
+     const QString tableName = "grade";
+     const QString fieldName = "graph";
+
+     const QByteArray imageData = dbFacade->getValueFromDB<QByteArray>(fieldName, tableName, condition);
+
+     if (!imageData.isEmpty()) {
+         loadImageData(imageData);
+     } else {
+         qDebug() << "onPushButtonEndTestClicked: No image for grade" << sGrade;
+         QMessageBox::warning(this, "Предупреждение",
+                              "Изображение для оценки " + sGrade + " не найдено");
+     }
+
+     // Сброс состояния
+     // const size_t taskCount = std::min(static_cast<size_t>(MAX_TASK), num_cur_task.saveTaskPushButton.size());
+     // for (size_t i = 0; i < taskCount; ++i) {
+     //     num_cur_task.saveTaskPushButton[i] = false;
+     //     num_cur_task.saveAnswerRadioButton[i] = 0;
+     // }
+     for (int i = 0; i < totalQuestion; ++i) {
+         num_cur_task.saveTaskPushButton[i] = false;
+         num_cur_task.saveAnswerRadioButton[i] = 0;
+     }
+     ready_madeTasks = 0;
+     tGrade = 0;
+     delFileDir(state.pathGraph);
+     ui->menubar->show();
+
+     qDebug() << "Test completed. Grade:" << sGrade << "Score:" << tGrade << "/" << totalQuestion;
  }
+
  void MainWindow::loadImageData(QByteArray imageData){
 
      restoreTabsAndWidgets();
@@ -862,52 +1068,106 @@ void MainWindow::testGrade(){
          qDebug() << "Failed to load image from data.";
      }
  }
-void MainWindow:: testBreak_clicked(){
-    ui->framTasksButton->    hide();
-    ui->pushButtonEndTest->  hide();
-    ui->pushButtonPrevious-> hide();
-    ui->pushButtonNext->     hide();
-    ui->pushButtonTestBreak->hide();
 
-    ui->menubar->show();
-    for (int i = 0; i < MAX_TASK; i++)  {
-        num_cur_task.saveTaskPushButton[i]=false;
-        num_cur_task.saveAnswerRadioButton[i]=0;
-    }
-    delFileDir(state.pathGraph);
+ void MainWindow::onTestBreakClicked() {
+     // Проверка основного UI
+     if (!ui) {
+         qDebug() << "onTestBreakClicked: ui is nullptr";
+         return;
+     }
 
-    restoreTabsAndWidgets();
-    hideTab(customTabAnime);
-    hideButtonTest();
+     qDebug() << "onTestBreakClicked: Breaking test execution";
 
-    Label[1]->setText("Время теста: "+QString::number(state.testExecutionTime));
-    disconnect(timer, &QTimer::timeout, this, &MainWindow::updateProgress);
-}
+     // Скрытие всех элементов управления тестом
+     auto hideIfExists = [](QWidget* widget) {
+         if (widget) widget->hide();
+     };
+
+     hideIfExists(ui->framTasksButton);
+     hideIfExists(ui->pushButtonEndTest);
+     hideIfExists(ui->pushButtonPrevious);
+     hideIfExists(ui->pushButtonNext);
+     hideIfExists(ui->pushButtonTestBreak);
+
+     // Показ меню
+     if (ui->menubar) {
+         ui->menubar->show();
+     }
+
+     // Сброс состояния заданий (безопасно)
+     const int totalTasks = num_cur_task.getTotalQwest();
+     const int taskCount = std::min(MAX_TASK, totalTasks);
+
+     if (taskCount > 0) {
+         for (int i = 0; i < taskCount; ++i) {
+             num_cur_task.saveTaskPushButton[i] = false;
+             num_cur_task.saveAnswerRadioButton[i] = 0;
+         }
+         qDebug() << "onTestBreakClicked: Reset" << taskCount << "tasks";
+     } else {
+         qDebug() << "onTestBreakClicked: No tasks to reset";
+     }
+
+     // Сброс глобальных переменных состояния
+     ready_madeTasks = 0;
+     tGrade = 0;
+
+     // Очистка временных файлов
+     if (!state.pathGraph.isEmpty()) {
+         delFileDir(state.pathGraph);
+     }
+
+     // Восстановление UI
+     restoreTabsAndWidgets();
+     hideTab(customTabAnime);
+     hideButtonTest();
+
+     // Обновление текста метки времени
+     if (Label[1]) {
+         const QString timeText = "Время теста: " +
+                                  (state.testExecutionTime > 0 ?
+                                       QString::number(state.testExecutionTime) :
+                                       "не задано");
+         Label[1]->setText(timeText);
+     }
+
+     // Отключение таймера
+     if (timer) {
+         disconnect(timer, &QTimer::timeout, this, &MainWindow::updateProgress);
+         qDebug() << "onTestBreakClicked: Timer disconnected";
+     } else {
+         qDebug() << "onTestBreakClicked: Timer is nullptr";
+     }
+ }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
-    delFileDir(state.pathGraph);
-    if(ui->lineEditGraph->text()!=""){
-        state.pathGraph=ui->lineEditGraph->text();//lineEdiPathHelp
+    const QMessageBox::StandardButton resBtn = QMessageBox::question(
+        this,
+        "Подтверждение выхода",
+        "Вы действительно хотите выйти?",
+        QMessageBox::No | QMessageBox::Yes,
+        QMessageBox::No
+        );
 
-    }else{
-        qDebug()<<"Не указан путь к графике справки"<<ui->lineEditGraph->text();
-    }
-
-    QPoint pos = this->frameGeometry().topLeft();
-    QSize size = this->geometry().size();
-    state.SaveState(pos, size);
-
-    QMessageBox::StandardButton resBtn = QMessageBox::question(this, "Подтверждение выхода",
-                                        "Вы действительно хотите выйти?",
-                                        QMessageBox::No | QMessageBox::Yes,
-                                        QMessageBox::No);
     if (resBtn != QMessageBox::Yes) {
         event->ignore();
-    } else {
-        event->accept();
+        return; // Важно: не сохранять состояние при отмене
     }
-  //  dbFacade.closeDatabase();
 
+    // Только при подтверждении выхода
+    delFileDir(state.pathGraph);
+
+    if (!ui->lineEditGraph->text().isEmpty()) {
+        state.pathGraph = ui->lineEditGraph->text();
+    } else {
+        qDebug() << "Не указан путь к графике справки" << ui->lineEditGraph->text();
+    }
+
+    const QPoint pos = this->frameGeometry().topLeft();
+    const QSize size = this->geometry().size();
+    state.SaveState(pos, size);
+
+    event->accept();
 }
 
 MainWindow::~MainWindow(){
@@ -1103,7 +1363,7 @@ void MainWindow::updateProgress() {
         Label[1]->setText("Тест завершен!");
         currentTime=0;
         disconnect(timer, &QTimer::timeout, this, &MainWindow::updateProgress);
-        pushButtonEndTest_clicked();
+        onPushButtonEndTestClicked();
     }
 }
 

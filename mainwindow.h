@@ -94,16 +94,21 @@ private:
 private slots:
     void closeEvent(QCloseEvent* event);
     void testing_clicked();
-    void choosingTheme_clicked(QStringList stringList);
+    void onChooseThemeClicked(const QStringList& stringList);
     void changeTheme(const QString &theme, int Index);
-    void pushButton_clicked();
-    void radioButtons_clicked();
-    void pushButtonPrevious_clicked();
-    void pushButtonNext_clicked();
-    void pushButtonEndTest_clicked();
-    void testBreak_clicked();
+    void onPushButtonClicked();
+    void onRadioButtonClicked();
+    void onPushButtonPreviousClicked();
+    void onPushButtonNextClicked();
+    void onPushButtonEndTestClicked();
+    void onTestBreakClicked();
     void showPushButtonTask(int num_current_task,int num_previous_task);
+
     void uploadingBrowser();
+    QString formatAnswerText(const QString& originalAnswer,
+                             const QString& answerPrefix);
+
+
     void showRadioButtonTask();
     void deleteRadioButtonTask();
     void testGrade();
