@@ -44,7 +44,7 @@ T DBFacade::getValueFromDB(const QString &fieldName, const QString &tableName, c
         return T(); // Возвращаем значение по умолчанию для типа T
     }
 
-    QString query = QString("SELECT %1 FROM %2 %3").arg(fieldName, tableName, condition);
+    QString query = QString("SELECT %1 FROM %2 %3 ORDER BY n ASC").arg(fieldName, tableName, condition);
 
     if (m_query->exec(query)) {
         if (m_query->next()) {

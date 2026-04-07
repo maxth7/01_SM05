@@ -58,10 +58,10 @@ void MainWindow::setupMenuBar() {
     QAction*  help            = new QAction(tr("&Справка"), this);
 
     connect(choosingTheme, &QAction::triggered, this, &MainWindow::getListThemes);
-    connect(testing,       &QAction::triggered, this, &MainWindow::testing_clicked);
-    connect(trainingManual,&QAction::triggered, this, &MainWindow::trainingManual_clicked);
-    connect(setting,       &QAction::triggered, this, &MainWindow::setting_clicked);
-    connect(help,          &QAction::triggered, this, &MainWindow::help_clicked);
+    connect(testing,       &QAction::triggered, this, &MainWindow::onTestingClicked);
+    connect(trainingManual,&QAction::triggered, this, &MainWindow::onTrainingManualButtonClicked);
+    connect(setting,       &QAction::triggered, this, &MainWindow::onSettingClicked);
+    connect(help,          &QAction::triggered, this, &MainWindow::onHelpClicked);
 
     ui->menubar->addAction(choosingTheme);
     ui->menubar->addAction(testing);
@@ -98,7 +98,8 @@ void MainWindow::setupStatusBar() {
         Label[1]->setText(msg);
         QCoreApplication::exit(1);
     }
-    createLabelsForStatusbar();
+    setupStatusBarLabels();
+
     QString condition = " Where n="+QString::number(selectedIndex);
     QString tableName = "tasks";
     QString fieldName = "task";
@@ -140,8 +141,8 @@ void MainWindow::settingTab(){
     ui->tabWidget->addTab(customTabAnime,"customTabAnime");
     ui->tabWidget->addTab(customTab,"customTab");
     saveTabsAndWidgets();
-    hideTab(customTabAnime);
-    hideButtonTest();
+    showOnlyThisTab(customTabAnime);
+    hideAllTestControls();
 }
 
 void MainWindow::getListThemes(){
@@ -170,7 +171,7 @@ void MainWindow::onChooseThemeClicked(const QStringList& stringList) {
 
     themeMenu.exec(QCursor::pos());
     restoreTabsAndWidgets();
-    hideTab(customTabAnime);
+    showOnlyThisTab(customTabAnime);
 }
 
 void MainWindow::changeTheme(const QString& theme, int index) {
@@ -205,6 +206,8 @@ void MainWindow::saveTabsAndWidgets() {
 }
 
  void MainWindow::restoreTabsAndWidgets() {
+    validateUi();  // Фатальная ошибка если ui == nullptr
+
      ui->tabWidget->tabBar()->show();
      ui->tabWidget->tabBar()->setStyleSheet("");
 
@@ -220,75 +223,207 @@ void MainWindow::saveTabsAndWidgets() {
      }
  }
 
-void MainWindow::hideTab(QWidget* widget){
-    int tabCount = ui->tabWidget->count();
-    QList<int> tabsToRemove;
+ // Основная функция
+ void MainWindow::showOnlyThisTab(QWidget* widget) {
+     validateUi();
 
-    for (int i = 0; i < tabCount; ++i) {
-        if (ui->tabWidget->widget(i) != widget) {
-            tabsToRemove.append(i);
-        }
-    }
+     if (!widget) {
+         qDebug() << "showOnlyThisTab: widget is nullptr";
+         return;
+     }
 
-    for (int i = tabsToRemove.count() - 1; i >= 0; --i) {
-        int tabIndex = tabsToRemove.at(i);
-        ui->tabWidget->removeTab(tabIndex);
-    }
+     removeAllTabsExcept(widget);
+     hideTabBar();
+     hideGradeView();
+ }
 
-    ui->tabWidget->tabBar()->setStyleSheet("QTabBar::tab { height: 0px; }");
-    ui->graphicsViewGrade->hide();
+ // 1.Удаление всех вкладок кроме указанной
+ void MainWindow::removeAllTabsExcept(QWidget* widgetToKeep) {
+     if (!ui->tabWidget) {
+         qDebug() << "removeAllTabsExcept: tabWidget is nullptr";
+         return;
+     }
+
+     // даляем в обратном порядке
+     for (int i = ui->tabWidget->count() - 1; i >= 0; --i) {
+         QWidget* tab = ui->tabWidget->widget(i);
+         if (tab != widgetToKeep) {
+             ui->tabWidget->removeTab(i);
+             tab->deleteLater();  //Безопасное удаление
+         }
+     }
+ }
+
+ // 2.Скрытие панели вкладок
+ void MainWindow::hideTabBar() {
+     if (!ui->tabWidget || !ui->tabWidget->tabBar()) {
+         qDebug() << "hideTabBar: tabWidget or tabBar is nullptr";
+         return;
+     }
+
+     ui->tabWidget->tabBar()->setStyleSheet("QTabBar::tab { height: 0px; }");
+ }
+
+ // 3.Скрытие graphicsView
+ void MainWindow::hideGradeView() {
+     if (ui->graphicsViewGrade) {
+         ui->graphicsViewGrade->hide();
+     } else {
+         qDebug() << "hideGradeView: graphicsViewGrade is nullptr";
+     }
+ }
+
+
+
+// Основная фасадная функция
+void MainWindow::hideAllTestControls() {
+    validateUi();  // Проверка ui (из вашего кода)
+
+    hideTestButtons();
+    hideTestContainers();
+    hideTestProgressIndicator();
+    resetTestTimer();
 }
 
-void MainWindow::hideButtonTest() {
-    // Список кнопок для скрытия
-    QList<QPushButton*> buttonsToHide = {
+// 1.Скрытие всех кнопок теста
+void MainWindow::hideTestButtons() {
+    const QList<QPushButton*> buttonsToHide = {
         ui->pushButtonEndTest,
         ui->pushButtonPrevious,
         ui->pushButtonNext,
         ui->pushButtonTestBreak
     };
 
-    for (QPushButton* button : buttonsToHide) {
-        button->hide();
+    for (const auto& button : buttonsToHide) {
+        if (button) button->hide();
     }
-
-    ui->framTasksButton->hide();
-    ui->progressBar->hide();
-    currentTime = 0;
-    ui->labelTaskNotComleted->hide();
 }
 
-void MainWindow::setting_clicked(){
-    restoreTabsAndWidgets();//setting_clicked
-    hideTab(ui->tabSetting);
-    hideButtonTest();
+// 2.Скрытие контейнеров
+void MainWindow::hideTestContainers() {
+    if (ui->framTasksButton) {
+        ui->framTasksButton->hide();
+    } else {
+        qDebug() << "hideTestContainers: framTasksButton is nullptr";
+    }
+}
+
+// 3.Скрытие индикатора прогресса
+void MainWindow::hideTestProgressIndicator() {
+    if (ui->progressBar) {
+        ui->progressBar->hide();
+    }
+
+    if (ui->labelTaskNotComleted) {
+        ui->labelTaskNotComleted->hide();
+    }
+}
+
+// 4.Сброс таймера
+void MainWindow::resetTestTimer() {
+    currentTime = 0;
+    // Если есть таймер, его тоже можно остановить здесь
+    if (timer) {
+        timer->stop();
+    }
+}
+
+void MainWindow::onSettingClicked() {
+    //Основная функция
+    validateUi();  //Фатальная ошибка если ui == nullptr
+    setupSettingTabUI();
+    configureFontSettings();
+    setupStretchRadioButtons();
+    setupTabBackground();
+    ensureCentralWidget();
+}
+// 1. Настройка базового UI
+void MainWindow::setupSettingTabUI() {
+    validateUi();  // Фатальная ошибка если ui == nullptr
+
+    restoreTabsAndWidgets();
+    showOnlyThisTab(ui->tabSetting);
+    hideAllTestControls();
+    ui->tabWidget->show();
+}
+
+// 2.Настройка шрифтов
+void MainWindow::configureFontSettings() {
+
+    validateUi();  // Фатальная ошибка если ui == nullptr
+    if (!ui->groupBoxStretch) {
+        qDebug() << "configureFontSettings: groupBoxStretch is nullptr";
+        return;
+    }
 
     QFont font = ui->groupBoxStretch->font();
-    font.setPointSize(14);
+    font.setPointSize(UiConstants ::SETTINGS_FONT_SIZE);
     ui->groupBoxStretch->setFont(font);
     ui->groupBoxStretch->setAlignment(Qt::AlignTop);
-    ui->radioButtonStretch->adjustSize();
-    ui->radioButtonNoStretch->adjustSize();
 
-    connect(ui->radioButtonStretch,   &QRadioButton::clicked,
-            this, &MainWindow::radioButtonsStretch_clicked, Qt::UniqueConnection);
+    // Настройка размера радиокнопок
+    if (ui->radioButtonStretch) ui->radioButtonStretch->adjustSize();
+    if (ui->radioButtonNoStretch) ui->radioButtonNoStretch->adjustSize();
+}
+
+// 3.Настройка соединений
+void MainWindow::setupStretchRadioButtons() {
+
+    validateUi();  // Фатальная ошибка если ui == nullptr
+
+    if (!ui->radioButtonStretch || !ui->radioButtonNoStretch) {
+        qDebug() << "setupStretchRadioButtons: radio buttons not initialized";
+        return;
+    }
+
+    // Отключаем старые соединения, чтобы избежать дублирования
+    disconnect(ui->radioButtonStretch, &QRadioButton::clicked,
+               this, &MainWindow::radioButtonsStretch_clicked);
+    disconnect(ui->radioButtonNoStretch, &QRadioButton::clicked,
+               this, &MainWindow::radioButtonsStretch_clicked);
+
+    // Устанавливаем новые соединения
+    connect(ui->radioButtonStretch, &QRadioButton::clicked,
+            this, &MainWindow::radioButtonsStretch_clicked);
     connect(ui->radioButtonNoStretch, &QRadioButton::clicked,
-            this, &MainWindow::radioButtonsStretch_clicked, Qt::UniqueConnection);
+            this, &MainWindow::radioButtonsStretch_clicked);
+}
 
+// 4. Настройка фона
+void MainWindow::setupTabBackground() {
+    validateUi();  // Фатальная ошибка если ui == nullptr
+    if (!ui->tabSetting) {
+        qDebug() << "setupTabBackground: tabSetting is nullptr";
+        return;
+    }
 
-    QPixmap background(":/images/BackgroundsFP2000/WB00760L.GIF");
+    const QPixmap background(UiConstants ::SETTINGS_BACKGROUND_PATH);
+
+    if (background.isNull()) {
+        qDebug() << "setupTabBackground Error: failed to load image" << UiConstants ::SETTINGS_BACKGROUND_PATH;
+        return;
+    }
+
     QPalette palette = ui->tabSetting->palette();
     palette.setBrush(QPalette::Window, background);
     ui->tabSetting->setPalette(palette);
     ui->tabSetting->setAutoFillBackground(true);
+}
 
-    ui->tabWidget->     show();
-    //setCentralWidget(ui->centralwidget);//Chatson
+// 5. Установка центрального виджета
+void MainWindow::ensureCentralWidget() {
+    validateUi();  // Фатальная ошибка если ui == nullptr
+
+    if (!ui || !ui->centralwidget) {
+        qDebug() << "ensureCentralWidget: ui or centralwidget is nullptr";
+        return;
+    }
+
     if (centralWidget() != ui->centralwidget) {
         setCentralWidget(ui->centralwidget);
     }
 }
-
+//=======================================================
 void MainWindow::radioButtonsStretch_clicked() {
 
     if (ui->radioButtonNoStretch->isChecked()) {
@@ -299,33 +434,76 @@ void MainWindow::radioButtonsStretch_clicked() {
     }
 }
 
-void MainWindow::help_clicked(){
-    if (ui->centralwidget && centralWidget() != ui->centralwidget) {
+
+void MainWindow::onHelpClicked() {
+    // Основная функция
+    // if (!ui) {
+    //     qDebug() << "onHelpClicked: ui is nullptr";
+    //     return;
+    // }
+    validateUi();
+
+    ensureCorrectCentralWidget();
+    setupHelpTabUI();
+    loadHelpContent();
+}
+
+// 1.Обеспечение правильного центрального виджета
+void MainWindow::ensureCorrectCentralWidget() {
+    if (!ui || !ui->centralwidget) {
+        qDebug() << "ensureCorrectCentralWidget: ui or centralwidget is nullptr";
+        return;
+    }
+
+    if (centralWidget() != ui->centralwidget) {
         setCentralWidget(ui->centralwidget);
     }
+}
+
+// 2.Настройка UI для вкладки Help
+void MainWindow::setupHelpTabUI() {
+    // if (!ui) {
+    //     qDebug() << "setupHelpTabUI: ui is nullptr";
+    //     return;
+    // }
+    validateUi();
 
     restoreTabsAndWidgets();
-    if (ui->tabHelp) {
-        hideTab(ui->tabHelp);
-    }
-    hideButtonTest();
 
-    QString fieldNameHtm="htmlcode";
-    QString tableNameHtm="help";
-    QString fieldNameFileGraph="filename";
-    QString fieldNameImageData="graph";
-    QString tableNameGraph="graphhelp";
-    QString condition="";
+    if (ui->tabHelp) {
+        showOnlyThisTab(ui->tabHelp);
+    } else {
+        qDebug() << "setupHelpTabUI: tabHelp is nullptr";
+    }
+
+    hideAllTestControls();
+}
+
+// 3. Загрузка содержимого Help
+void MainWindow::loadHelpContent() {
+    if (!ui || !ui->textBrowserHelp) {
+        qDebug() << "loadHelpContent: ui or textBrowserHelp is nullptr";
+        return;
+    }
+
+    const QString fieldNameHtm = HelpConfig::HTML_FIELD;
+    const QString tableNameHtm = HelpConfig::TABLE_NAME;
+    const QString fieldNameFileGraph = HelpConfig::GRAPH_FIELD_FILENAME;
+    const QString fieldNameImageData = HelpConfig::GRAPH_FIELD_DATA;
+    const QString tableNameGraph = HelpConfig::GRAPH_TABLE_NAME;
+    const QString condition;  // Пустая строка по умолчанию
+
     loadBrowser(ui->textBrowserHelp,
                 fieldNameHtm,
                 tableNameHtm,
                 fieldNameFileGraph,
                 fieldNameImageData,
                 tableNameGraph,
-                condition  );
+                condition);
 }
+//====================================================
 
-void MainWindow::testing_clicked() {
+void MainWindow::onTestingClicked() {
     tGrade = 0;
 
     if (centralWidget() != ui->centralwidget) {
@@ -341,8 +519,8 @@ void MainWindow::testing_clicked() {
         qDebug() << "Некорректное время выполнения теста: " << state.testExecutionTime;
     }
 
-    showButtonTest();
-    hideTab(ui->tabTest);
+    showTestControls();
+    showOnlyThisTab(ui->tabTest);
 
     ui->tabWidget->show();
 
@@ -373,54 +551,85 @@ void MainWindow::testing_clicked() {
     const int totalQuestion = num_cur_task.getTotalQwest();
     ui->labelTaskNotComleted->setText("Не выполнено заданий: "
                                       + QString::number(totalQuestion - ready_madeTasks));
-    createInterface();
+    setupTestInterface();
 }
 
-void MainWindow::showButtonTest() {
-    QList<QWidget*> widgets = {
-        ui->framTasksButton,
+
+// Основная фасадная функция
+void MainWindow::showTestControls() {
+    validateUi();
+
+    showTestButtons();
+    showTestContainer();
+    showTestLabel();
+}
+
+// 1.Показ всех кнопок теста
+void MainWindow::showTestButtons() {
+    const QList<QPushButton*> buttons = {
         ui->pushButtonEndTest,
         ui->pushButtonPrevious,
         ui->pushButtonNext,
-        ui->pushButtonTestBreak,
-        ui->labelTaskNotComleted
+        ui->pushButtonTestBreak
     };
 
-    for (QWidget* widget : widgets) {
-        if (widget && !widget->isVisible()) {
-            widget->show();
-        }
+    for (const auto& button : buttons) {
+        if (button) button->show();
     }
 }
 
-void MainWindow::trainingManual_clicked(){
-    if (centralWidget() != ui->centralwidget) {
-        setCentralWidget(ui->centralwidget);
+// 2.Показ контейнера
+void MainWindow::showTestContainer() {
+    if (ui->framTasksButton) {
+        ui->framTasksButton->show();
+    } else {
+        qDebug() << "showTestContainer: framTasksButton is nullptr";
     }
+}
 
+// 3. Показ метки
+void MainWindow::showTestLabel() {
+    if (ui->labelTaskNotComleted) {
+        ui->labelTaskNotComleted->show();
+    } else {
+        qDebug() << "showTestLabel: labelTaskNotComleted is nullptr";
+    }
+}
+
+// 4.Универсальная функция показа виджетов
+void MainWindow::showWidgets(const QList<QWidget*>& widgets) {
+    for (const auto& widget : widgets) {
+        if (widget) widget->show();
+    }
+}
+//=================================================
+
+void MainWindow::onTrainingManualButtonClicked(){
+
+    ensureCorrectCentralWidget();
     restoreTabsAndWidgets();
 
-    hideTab(ui->tabTranManual);
-    hideButtonTest();
+    showOnlyThisTab(ui->tabTranManual);
+    hideAllTestControls();
 
      ui->tabWidget->show();
 
-
-    QString fieldNameHtm="met";
-    QString tableNameHtm="tasks";
-    QString fieldNameFileGraph="filename";
-    QString fieldNameImageData="graph";
-    QString tableNameGraph="graphmet";
-    QString condition="Where idtasks="+QString::number(selectedIndex);
+    if (selectedIndex < 0) {
+        qWarning() << "Invalid selected index:" << selectedIndex;
+        return;
+    }
+    const QString condition="Where idtasks="+QString::number(selectedIndex);
 
     loadBrowser(ui->textBrowserMet,
-                fieldNameHtm,
-                tableNameHtm,
-                fieldNameFileGraph,
-                fieldNameImageData,
-                tableNameGraph,
-                condition  );
+                ManualConstants::TEXT_FIELD,
+                ManualConstants::TABLE_NAME,
+                ManualConstants::GRAPH_FIELD,
+                ManualConstants::IMAGE_FIELD,
+                ManualConstants::GRAPH_TABLE,
+                condition);
 }
+
+
 void MainWindow::setupRadioButtons(int maxRadioBut) {
     if (ui->frameRadioButton->layout() != nullptr) {
         QLayoutItem* item;
@@ -496,18 +705,18 @@ void MainWindow::setupPushButtons(int maxPushButtons,int colCount) {
 
     }
 }
-void MainWindow::createInterface(){
-    ui->pushButtonEndTest->setVisible(false);
-    ui->pushButtonPrevious->setVisible(true);
-    ui->pushButtonNext->setVisible(true);
-    ui->tabWidget->setTabShape(QTabWidget::Triangular);
 
-    int totalQuestions=num_cur_task.getTotalQwest();
-
-    copytask(totalQuestions);
-
-    ui->textBrowserAnser->setStyleSheet(styleSheet);
-    ui->textBrowserQwest->setStyleSheet(styleSheet);
+//=================================================
+// Главная функция - только координация
+void MainWindow::setupTestInterface() {
+    configureInitialVisibility();
+    configureTabAppearance();
+    int totalQuestions=prepareTestData();
+    if (totalQuestions <= 0) {
+        qWarning() << "No questions available!";
+        return ;
+    }
+    applyStylesToBrowsers();
 
     uploadingBrowser();
 
@@ -517,23 +726,148 @@ void MainWindow::createInterface(){
     const int colCount = (totalQuestions % rowCount == 0) ? (totalQuestions / rowCount) : (totalQuestions / rowCount + 1);
     setupPushButtons(totalQuestions,colCount);
 }
-
-void MainWindow::createLabelsForStatusbar(){
-       ui->statusbar->setStyleSheet("border: 2px solid black");
-       QFont font;
-       font.setPointSize(12);
-       font.setBold(true);
-
-       for(int i=0;i<maximumNumberlabel;++i){
-           Label[i] = new QLabel("Label"+QString::number(i));
-           Label[i]->setAlignment(Qt::AlignLeft);
-           Label[i]->setFont(font);
-
-           Label[i]->setStyleSheet("background-color: #FF8C00; color: #2E2E2E;");
-           ui->statusbar->addWidget(Label[i]);
-       }
+// Настройка видимости элементов
+void MainWindow::configureInitialVisibility() {
+    ui->pushButtonEndTest->setVisible(false);
+    ui->pushButtonPrevious->setVisible(true);
+    ui->pushButtonNext->setVisible(true);
 }
 
+// Настройка внешнего вида табов
+void MainWindow::configureTabAppearance() {
+    ui->tabWidget->setTabShape(QTabWidget::Triangular);
+}
+
+int MainWindow::prepareTestData() {
+
+    int totalQuestions=num_cur_task.getTotalQwest();
+    if (totalQuestions <= 0) {
+      //  qWarning() << "No questions available!";
+        return 0;
+    }
+    return totalQuestions;
+
+    shuffleAndCopyTasks(totalQuestions);
+}
+// рименение стилей к браузерам
+void MainWindow::applyStylesToBrowsers() {
+
+    ui->textBrowserAnser->setStyleSheet(styleSheet);
+    ui->textBrowserQwest->setStyleSheet(styleSheet);
+}
+//==================================================
+
+
+void MainWindow::setupStatusBarLabels() {
+    if (!isStatusBarValid()) return;
+
+    cleanupStatusBarLabels();  // Удаляем старые лейблы
+
+    configureStatusBarStyle();
+
+    QFont labelFont = createLabelFont();
+
+    for (int i = 0; i < MAX_LABEL; ++i) {
+        QLabel* label = createStatusLabel(i, labelFont);
+        addLabelToStatusBar(label);
+        storeLabelPointer(i, label);
+    }
+}
+
+//Проверка валидности статусбара
+bool MainWindow::isStatusBarValid() const {
+    if (!ui->statusbar) {
+        qWarning() << "Status bar is null!";
+        return false;
+    }
+    return true;
+}
+
+
+//Очистка старых лейблов (предотвращение утечек)
+void MainWindow::cleanupStatusBarLabels() {
+    // Удаляем существующие лейблы из statusbar
+    for (int i = 0; i < MAX_LABEL; ++i) {
+        if (Label[i]) {
+            ui->statusbar->removeWidget(Label[i]);
+            delete Label[i];
+            Label[i] = nullptr;  // Важно обнулять!
+        }
+    }
+}
+
+//  Настройка стиля статусбара
+void MainWindow::configureStatusBarStyle() {
+    ui->statusbar->setStyleSheet(getStatusBarStyleSheet());
+}
+
+//  Получение стиля статусбара
+QString MainWindow::getStatusBarStyleSheet() const {
+    return "border: 2px solid black";
+}
+
+//  Создание шрифта для лейблов
+QFont MainWindow::createLabelFont() const {
+    QFont font;
+    font.setPointSize(getLabelFontSize());
+    font.setBold(isLabelFontBold());
+    return font;
+}
+
+//  Получение размера шрифта (легко переопределить)
+int MainWindow::getLabelFontSize() const {
+    return 12;  // Можно вынести в константу или настройки
+}
+
+//  Получение жирности шрифта
+bool MainWindow::isLabelFontBold() const {
+    return true;
+}
+
+//  Создание одного лейбла
+QLabel* MainWindow::createStatusLabel(int index, const QFont& font) {
+    QLabel* label = new QLabel(getLabelText(index));
+    label->setAlignment(getLabelAlignment());
+    label->setFont(font);
+    label->setStyleSheet(getLabelStyleSheet());
+    return label;
+}
+
+//  Получение текста лейбла
+QString MainWindow::getLabelText(int index) const {
+    return "Label" + QString::number(index);
+}
+
+//  Получение выравнивания лейбла
+Qt::Alignment MainWindow::getLabelAlignment() const {
+    return Qt::AlignLeft;
+}
+
+//  Получение стиля лейбла
+QString MainWindow::getLabelStyleSheet() const {
+    return "background-color: #FF8C00; color: #2E2E2E;";
+}
+
+//  Добавление лейбла в статусбар
+void MainWindow::addLabelToStatusBar(QLabel* label) {
+    if (label && ui->statusbar) {
+        ui->statusbar->addWidget(label);
+    }
+}
+
+//  Сохранение указателя на лейбл
+void MainWindow::storeLabelPointer(int index, QLabel* label) {
+    if (index >= 0 && index < MAX_LABEL) {  // Проверка границ!
+        Label[index] = label;
+    } else {
+        qWarning() << "Label index out of bounds:" << index;
+        delete label;  // Предотвращаем утечку
+    }
+}
+
+
+
+//============================================================
 void MainWindow::onPushButtonClicked() {
     // 1. Проверяем отправителя
     const QPushButton* clickedButton = qobject_cast<QPushButton*>(sender());
@@ -542,7 +876,7 @@ void MainWindow::onPushButtonClicked() {
         return;
     }
 
-    // 2. Проверяем текст кнопки
+    //2. Проверяем текст кнопки
     const QString buttonText = clickedButton->text();
     bool conversionOk = false;
     const int buttonNumber = buttonText.toInt(&conversionOk);
@@ -552,28 +886,28 @@ void MainWindow::onPushButtonClicked() {
         return;
     }
 
-    // 3. Получаем текущее состояние
+    //3. Получаем текущее состояние
     const int numPreviousTask = num_cur_task.getNumTask();
     int numCurrentTask = buttonNumber - 1;  // Конвертируем в 0-based индекс
 
-    // 4. Проверяем, что это действительно новое задание
+    //4. Проверяем, что это действительно новое задание
     if (numCurrentTask == numPreviousTask) {
         return;  // Та же задача, ничего не делаем
     }
 
-    // 5. Проверяем границы (если num_cur_task знает максимальное количество)
+    //5. Проверяем границы (если num_cur_task знает максимальное количество)
     if (numCurrentTask < 0 || numCurrentTask >= num_cur_task.getTotalQwest()) {
         qDebug() << "onPushButtonClicked: task index out of range:" << numCurrentTask;
         return;
     }
 
-    // 6. Обновляем состояние
+    //6. Обновляем состояние
     num_cur_task.setNumTask(numCurrentTask);
 
-    // 7. Обновляем UI
+    //7. Обновляем UI
     showPushButtonTask(numCurrentTask, numPreviousTask);
     uploadingBrowser();
-    showRadioButtonTask();
+    setupRadioButtonsForCurrentTask();
 }
 
 void MainWindow::onPushButtonPreviousClicked() {
@@ -590,8 +924,7 @@ void MainWindow::onPushButtonPreviousClicked() {
     }
 
     // Вычисляем предыдущую задачу
-    // const int previousTask = currentTask - 1;
-     int previousTask = currentTask - 1;
+        int previousTask = currentTask - 1;
 
     // Дополнительная проверка валидности
     const int totalTasks = num_cur_task.getTotalQwest();
@@ -606,7 +939,7 @@ void MainWindow::onPushButtonPreviousClicked() {
     // Обновляем UI
     showPushButtonTask(previousTask, currentTask);
     uploadingBrowser();
-    showRadioButtonTask();
+    setupRadioButtonsForCurrentTask();
 }
 
 void MainWindow::onPushButtonNextClicked() {
@@ -635,7 +968,7 @@ void MainWindow::onPushButtonNextClicked() {
     // Обновляем интерфейс
     showPushButtonTask(newIndex, currentIndex);
     uploadingBrowser();
-    showRadioButtonTask();
+    setupRadioButtonsForCurrentTask();
 
     // Включаем кнопку "Назад", если она была отключена
     if (ui->pushButtonPrevious && !ui->pushButtonPrevious->isEnabled()) {
@@ -717,53 +1050,92 @@ void MainWindow::showPushButtonTask(const int num_current_task, const int num_pr
     }
     pushButton[num_current_task]->show();
 }
-void MainWindow:: deleteRadioButtonTask(){
 
-    QVBoxLayout* layoutRadioButton = qobject_cast<QVBoxLayout*>(ui->frameRadioButton->layout());
-    QLayoutItem* item;
-    if(layoutRadioButton) {
-        while ((item = layoutRadioButton->takeAt(0)) != nullptr) {
-              delete item->widget();
-              delete item;
+
+void MainWindow::setupRadioButtonsForCurrentTask() {
+    cleanupRadioButtons();
+    createRadioButtonLayout();
+
+    int numAnswers = getCurrentTaskAnswerCount();
+    if (numAnswers <= 0) return;
+
+    createRadioButtons(numAnswers);
+    restoreRadioButtonState();
+}
+void MainWindow::cleanupRadioButtons() {
+    // Удаляем все кнопки из массива
+    for (int i = 0; i < MAX_ANSWER; ++i) {
+        if (radioButtons[i]) {
+            delete radioButtons[i];
+            radioButtons[i] = nullptr;  // Важно обнулять!
         }
     }
 
-    QLayout* previousLayout = ui->frameRadioButton->layout();
-
-    if (previousLayout) {
-       delete previousLayout;
+    // Удаляем layout
+    if (ui->frameRadioButton->layout()) {
+        QLayoutItem *item;
+        while ((item = ui->frameRadioButton->layout()->takeAt(0))) {
+            if (item->widget()) delete item->widget();
+            delete item;
+        }
+        delete ui->frameRadioButton->layout();
     }
 }
-
-void MainWindow:: showRadioButtonTask(){
-    deleteRadioButtonTask();
-    QVBoxLayout *layoutRadioButton = new QVBoxLayout(ui->frameRadioButton);
-    ui->frameRadioButton->setLayout(layoutRadioButton);
-    int numCurrentTask=num_cur_task.getNumTask();
-    int numAnswerRadioButton=num_cur_task.ctest[numCurrentTask].saveTotalAnswer;
-   for(int i=0;i<numAnswerRadioButton;++i){
-       radioButtons[i] = new QRadioButton(QString("%1").arg(i+1));
-
-       radioButtons[i]->setStyleSheet("QRadioButton {"
-                          "   font-size: 16px;"
-                          "   color: #4682B4;"
-                          "   font-weight: bold;"
-                          "background-color:#FFFFFF"
-                          "}"
-                          "QRadioButton::indicator {"
-                          "   width: 30px;"
-                          "   height: 30px;"
-                          "}");
-       ui->frameRadioButton->layout()->addWidget(radioButtons[i]);
-
-       connect(radioButtons[i], &QRadioButton::clicked, this, &MainWindow::onRadioButtonClicked);
-
-       if(i==num_cur_task.saveAnswerRadioButton[numCurrentTask]-1){
-            radioButtons[i]->setChecked(true);
-        }
-   }
+//  Создание layout
+void MainWindow::createRadioButtonLayout() {
+    auto *layout = new QVBoxLayout(ui->frameRadioButton);
+    ui->frameRadioButton->setLayout(layout);
 }
 
+//  Получение данных (инкапсуляция)
+int MainWindow::getCurrentTaskAnswerCount()  {
+    int currentTask = num_cur_task.getNumTask();
+        return num_cur_task.saveAnswerRadioButton[currentTask];
+}
+
+void MainWindow::createRadioButtons(int count) {
+    if (count > MAX_ANSWER) {
+        count = MAX_ANSWER;  // Защита от переполнения
+    }
+
+    for (int i = 0; i < count; ++i) {
+        radioButtons[i] = createRadioButton(i + 1);
+        ui->frameRadioButton->layout()->addWidget(radioButtons[i]);
+        connect(radioButtons[i], &QRadioButton::clicked,
+                this, &MainWindow::onRadioButtonClicked);
+    }
+}
+//  Создание стилизованной кнопки
+QRadioButton* MainWindow::createRadioButton(int number) const {
+    auto *radioButton = new QRadioButton(QString::number(number));
+    radioButton->setStyleSheet(getRadioButtonStyleSheet());
+    return radioButton;
+}
+//  Выделение стилей (легко менять/тестировать)
+QString MainWindow::getRadioButtonStyleSheet() const {
+    return R"(
+        QRadioButton {
+            font-size: 16px;
+            color: #4682B4;
+            font-weight: bold;
+            background-color: #FFFFFF;
+        }
+        QRadioButton::indicator {
+            width: 30px;
+            height: 30px;
+        }
+    )";
+}
+//  Восстановление состояния
+void MainWindow::restoreRadioButtonState() {
+    int currentTask = num_cur_task.getNumTask();
+    int savedAnswer = num_cur_task.saveAnswerRadioButton[currentTask];
+
+    if (savedAnswer > 0 && savedAnswer <= MAX_ANSWER) {
+        radioButtons[savedAnswer - 1]->setChecked(true);
+    }
+}
+//======================================
 void MainWindow::uploadingBrowser() {
     // 1. Проверка валидности текущей задачи
     const int numCurrentTask = num_cur_task.getNumTask();
@@ -831,9 +1203,6 @@ QString MainWindow::formatAnswerText(const QString& originalAnswer, const QStrin
 
     return formattedAnswer;
 }
-
-
-
 
 
 void MainWindow::onRadioButtonClicked() {
@@ -911,7 +1280,7 @@ void MainWindow::testGrade(){
     }
 }
 
- void MainWindow::copytask(int totalQuestions){
+ void MainWindow::shuffleAndCopyTasks(int totalQuestions){
     randomNumberQwest(totalQuestions);
     currTest randomTest[MAX_TASK];
     for (int i = 0; i <totalQuestions; ++i) {
@@ -1012,12 +1381,6 @@ void MainWindow::testGrade(){
                               "Изображение для оценки " + sGrade + " не найдено");
      }
 
-     // Сброс состояния
-     // const size_t taskCount = std::min(static_cast<size_t>(MAX_TASK), num_cur_task.saveTaskPushButton.size());
-     // for (size_t i = 0; i < taskCount; ++i) {
-     //     num_cur_task.saveTaskPushButton[i] = false;
-     //     num_cur_task.saveAnswerRadioButton[i] = 0;
-     // }
      for (int i = 0; i < totalQuestion; ++i) {
          num_cur_task.saveTaskPushButton[i] = false;
          num_cur_task.saveAnswerRadioButton[i] = 0;
@@ -1033,8 +1396,8 @@ void MainWindow::testGrade(){
  void MainWindow::loadImageData(QByteArray imageData){
 
      restoreTabsAndWidgets();
-     hideTab(customTab);
-     hideButtonTest();
+     showOnlyThisTab(customTab);
+     hideAllTestControls();
 
      ui->graphicsViewGrade->show();
      QGraphicsView* graphicsView = ui->graphicsViewGrade;
@@ -1119,8 +1482,8 @@ void MainWindow::testGrade(){
 
      // Восстановление UI
      restoreTabsAndWidgets();
-     hideTab(customTabAnime);
-     hideButtonTest();
+     showOnlyThisTab(customTabAnime);
+     hideAllTestControls();
 
      // Обновление текста метки времени
      if (Label[1]) {
@@ -1173,9 +1536,11 @@ void MainWindow::closeEvent(QCloseEvent* event) {
 MainWindow::~MainWindow(){
     delete ui;
     delete dbFacade; // Освобождаем память
-    for (int i = 0; i < maximumNumberlabel; ++i) {
-        delete Label[i]; // Освобождаем память для каждого QLabel, если они были созданы с помощью new
-    }
+
+    // for (int i = 0; i < MAX_LABEL; ++i) {
+    //     delete Label[i]; // Освобождаем память для каждого QLabel, если они были созданы с помощью new
+    // }
+    cleanupStatusBarLabels();
     delete calckgrade;
     qDeleteAll(savedWidgets); // Освобождает память для всех виджетов в списке
     savedWidgets.clear(); // Очищает список

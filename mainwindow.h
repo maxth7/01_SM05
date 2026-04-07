@@ -38,6 +38,8 @@
 #include <QLayoutItem>
 #include <QSharedMemory>
 #include <QRandomGenerator>
+#include <QString>
+
 #include "dbfacade.h"
 #include "createtasks.h"
 #include "custtb.h"
@@ -46,11 +48,20 @@
 
 #include "calculategrade.h"
 #include "checkinservices.h"
+#include "constants.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
+namespace ManualConstants {
+// Используем constexpr для эффективности
+inline constexpr char TEXT_FIELD[] = "met";
+inline constexpr char TABLE_NAME[] = "tasks";
+inline constexpr char GRAPH_FIELD[] = "filename";
+inline constexpr char IMAGE_FIELD[] = "graph";
+inline constexpr char GRAPH_TABLE[] = "graphmet";
+}
 class DBFacade ;
 
 class MainWindow : public QMainWindow {
@@ -84,16 +95,21 @@ public:
     QWidget *customTabAnime = new QWidget(this);
     QString styleSheet="";
 private:
-    static const int maximumNumberlabel = 2;
-    QLabel* Label[maximumNumberlabel];
+    //static const int maximumNumberlabel = 2;
+    static const int MAX_LABEL = 2;
+    QLabel* Label[MAX_LABEL];
     QMovie *movie = new QMovie(this);
     StretchLabel *stretchLabel = new StretchLabel(this);
     CalculateGrade *calckgrade= new CalculateGrade();
 
-
+    void validateUi() const {
+        if (!ui) {
+            qFatal("MainWindow Errors: ui is nullptr! This should never happen.");
+        }
+    }
 private slots:
     void closeEvent(QCloseEvent* event);
-    void testing_clicked();
+    void onTestingClicked();
     void onChooseThemeClicked(const QStringList& stringList);
     void changeTheme(const QString &theme, int Index);
     void onPushButtonClicked();
@@ -106,23 +122,76 @@ private slots:
 
     void uploadingBrowser();
     QString formatAnswerText(const QString& originalAnswer,
-                             const QString& answerPrefix);
+                             const QString& answerPrefix);//13
+    //void showRadioButtonTask();
+    void setupRadioButtonsForCurrentTask();
+        void cleanupRadioButtons();
+        void createRadioButtonLayout();
+        int getCurrentTaskAnswerCount();
+        void createRadioButtons(int count);
+        QRadioButton* createRadioButton(int number) const;
+        void restoreRadioButtonState();
+        QString getRadioButtonStyleSheet() const ;
 
-
-    void showRadioButtonTask();
-    void deleteRadioButtonTask();
     void testGrade();
-    void copytask(int totalQuest);
+    void shuffleAndCopyTasks(int totalQuest);
     void randomNumberQwest (int totalQuest);
     void randomNumberAnswer(int totalAnswer);
-    void createInterface();
-    void createLabelsForStatusbar();
-    void trainingManual_clicked();
-    void setting_clicked();
-    void help_clicked();
-    void hideButtonTest();
-    void hideTab(QWidget* widget);
-    void showButtonTest();
+
+    void setupTestInterface();
+        void configureInitialVisibility();
+        void configureTabAppearance();
+        int prepareTestData();
+        void applyStylesToBrowsers();
+
+    void setupStatusBarLabels();
+        bool isStatusBarValid() const;
+        void cleanupStatusBarLabels() ;
+        void configureStatusBarStyle();
+        QString getStatusBarStyleSheet() const;
+        QFont createLabelFont() const;
+        int getLabelFontSize() const;
+        bool isLabelFontBold() const;
+        QLabel* createStatusLabel(int index, const QFont& font) ;
+        QString getLabelText(int index) const;
+        Qt::Alignment getLabelAlignment() const;
+        QString getLabelStyleSheet() const;
+        void addLabelToStatusBar(QLabel* label);
+        void storeLabelPointer(int index, QLabel* label);
+
+    void onTrainingManualButtonClicked();
+        //void ensureCorrectCentralWidget() ;there are in onHelpClicked
+
+    void onSettingClicked();
+        void setupSettingTabUI();
+        void configureFontSettings();
+        void setupStretchRadioButtons();
+        void setupTabBackground();
+        void ensureCentralWidget();
+
+
+    void onHelpClicked();
+        void setupHelpTabUI();// privat?
+        void ensureCorrectCentralWidget();
+        void loadHelpContent();
+
+    void hideAllTestControls();
+        void hideTestButtons();
+        void hideTestContainers();
+        void resetTestTimer();
+        void hideTestProgressIndicator();
+
+    void showOnlyThisTab(QWidget* widget);
+        void removeAllTabsExcept(QWidget* widgetToKeep);
+        void hideTabBar();
+        void hideGradeView();
+
+    void showTestControls();
+        void showTestButtons();
+        void showTestContainer();
+        void showTestLabel();
+        void showWidgets(const QList<QWidget*>& widgets);
+
     void saveTabsAndWidgets();
     void restoreTabsAndWidgets();
     void loadBrowser(QTextBrowser*textBrowser,
