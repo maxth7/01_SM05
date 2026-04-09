@@ -33,95 +33,277 @@ void MainWindow::monitoringServices(QString serviceName){
         QCoreApplication::exit(1);
     }
 }
-void MainWindow::restoreStateMainWindow() {
-    state.RestoreState(pos, size);
-    QRect screenGeometry = QGuiApplication::primaryScreen()->geometry();
 
-    if (!screenGeometry.contains(QRect(pos, size))) {
-        pos = QPoint(0, 0);
-        size = QSize(800, 600);
+// void MainWindow::restoreStateMainWindow() {
+//     state.RestoreState(pos, size);
+//     QRect screenGeometry = QGuiApplication::primaryScreen()->geometry();
+
+//     if (!screenGeometry.contains(QRect(pos, size))) {
+//         pos = QPoint(0, 0);
+//         size = QSize(800, 600);
+//     }
+//     this->move(pos);
+//     this->resize(size);
+//     selectedIndex=state.CurrentThema-1;
+//     if (selectedIndex<1){
+//         selectedIndex=1;
+//     }
+//     ui->lineEditGraph->setText(state.pathGraph);
+// }
+void MainWindow::restoreStateMainWindow() {
+    validateUi();
+
+    // Восстановление геометрии
+    restoreWindowGeometry();
+
+    // Восстановление индекса темы
+    restoreSelectedThemeIndex();
+
+    // Восстановление пути к графикам
+    restoreGraphPath();
+}
+
+void MainWindow::restoreWindowGeometry() {
+    using namespace UiConstants;
+
+    state.RestoreState(pos, size);
+
+    const QRect screenGeometry = QGuiApplication::primaryScreen()->geometry();
+    const QRect windowRect(pos, size);
+
+    if (!screenGeometry.contains(windowRect)) {
+        // Устанавливаем значения по умолчанию
+        pos = QPoint(DEFAULT_WINDOW_POSITION_X, DEFAULT_WINDOW_POSITION_Y);
+        size = QSize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT);
+
+        qDebug() << "restoreWindowGeometry: window out of screen, using defaults";
     }
+
     this->move(pos);
     this->resize(size);
-    selectedIndex=state.CurrentThema-1;
-    if (selectedIndex<1){
-        selectedIndex=1;
+}
+
+void MainWindow::restoreSelectedThemeIndex() {
+    constexpr int MIN_INDEX = 0;  // 0-based index
+
+    // Конвертация из 1-based (сохраненный) в 0-based (используемый)
+    selectedIndex = state.CurrentThema - 1;
+
+    if (selectedIndex < MIN_INDEX) {
+        qDebug() << "restoreSelectedThemeIndex: invalid index" << selectedIndex
+                 << ", resetting to" << MIN_INDEX;
+        selectedIndex = MIN_INDEX;
     }
-    ui->lineEditGraph->setText(state.pathGraph);
+
+    // Опционально: проверка максимального индекса
+    const int maxIndex = getMaxThemeIndex();  // Нужно реализовать
+    if (selectedIndex >= maxIndex) {
+        qDebug() << "restoreSelectedThemeIndex: index" << selectedIndex
+                 << "out of range (max:" << maxIndex - 1 << ")";
+        selectedIndex = MIN_INDEX;
+    }
+}
+
+void MainWindow::restoreGraphPath() {
+    if (ui->lineEditGraph) {
+        ui->lineEditGraph->setText(state.pathGraph);
+    } else {
+        qDebug() << "restoreGraphPath: lineEditGraph is nullptr";
+    }
+}
+
+// Основная функция (Facade)
+void MainWindow::setupStatusBar() {
+    validateUi();
+
+    if (!areStatusLabelsValid()) {
+        qDebug() << "setupStatusBar: status labels are invalid";
+        return;
+    }
+
+    if (!initializeDatabaseConnection()) {
+        return;  // Ошибка уже обработана
+    }
+
+    updateStatusLabels();
+}
+
+// 1.Проверка валидности лейблов
+bool MainWindow::areStatusLabelsValid() const {
+    if (!Label[UiConstants::THEME_LABEL_INDEX]) {
+        qDebug() << "areStatusLabelsValid: theme label is nullptr";
+        return false;
+    }
+    if (!Label[UiConstants::STATUS_LABEL_INDEX]) {
+        qDebug() << "areStatusLabelsValid: status label is nullptr";
+        return false;
+    }
+    return true;
+}
+
+// 2.Инициализация подключения к БД
+bool MainWindow::initializeDatabaseConnection() {
+    using namespace DbConstants;
+
+    if (!dbFacade) {
+        qDebug() << "initializeDatabaseConnection: dbFacade is nullptr";
+        return false;
+    }
+
+    if (!dbFacade->openDatabaseQPSQL(DB_HOST, DB_NAME, DB_USER, DB_PASSWORD, DB_PORT)) {
+        showDatabaseErrorAndExit("Невозможно открыть БД.");
+        return false;
+    }
+
+    return true;
+}
+
+// 3.Отображение ошибки и выход
+void MainWindow::showDatabaseErrorAndExit(const QString& errorMsg) {
+    const QString fullMsg = "Не удалось запустить приложение. " + errorMsg;
+    QMessageBox::critical(this, "Ошибка", fullMsg);
+
+    if (Label[UiConstants::STATUS_LABEL_INDEX]) {
+        Label[UiConstants::STATUS_LABEL_INDEX]->setText(errorMsg);
+    }
+
+    QCoreApplication::exit(1);
+}
+
+// 4.Обновление статусных лейблов
+void MainWindow::updateStatusLabels() {
+    updateThemeLabel();
+    updateTimeLabel();
+}
+
+// 5.Обновление лейбла темы
+void MainWindow::updateThemeLabel() {
+    using namespace DbConstants;
+
+    const QString condition = " Where n=" + QString::number(selectedIndex);
+    const QString tableName = "tasks";
+    const QString fieldName = "task";
+
+    const QString htmlValue = dbFacade->getValueFromDB<QString>(fieldName, tableName, condition);
+    const QString themeText = extractThemeFromHtml(htmlValue);
+
+    if (!themeText.isEmpty() && Label[UiConstants::THEME_LABEL_INDEX]) {
+        Label[UiConstants::THEME_LABEL_INDEX]->setText(themeText);
+    }
+}
+
+// 6.Извлечение темы из HTML
+QString MainWindow::extractThemeFromHtml(const QString& html) {
+    using namespace HtmlConstants;
+
+    const int index = html.indexOf(BODY_BACKGROUND_PATTERN);
+    if (index == -1) {
+        return QString();
+    }
+
+    return html.left(index).simplified();
+}
+
+// 7.Обновление лейбла времени
+void MainWindow::updateTimeLabel() {
+    const QString timeTest = QString("Время теста: %1 мин")
+                                 .arg(QString::number(state.testExecutionTime, 'f', 2));
+
+    if (Label[UiConstants::STATUS_LABEL_INDEX]) {
+        Label[UiConstants::STATUS_LABEL_INDEX]->setText(timeTest);
+    }
 }
 
 void MainWindow::setupMenuBar() {
-    QAction*  choosingTheme   = new QAction(tr("&Темы"), this);
-    QAction*  testing         = new QAction(tr("&Тест"), this);
-    QAction*  trainingManual  = new QAction(tr("&Методичка"), this);
-    QAction*  setting         = new QAction(tr("&Настройки"), this);
-    QAction*  help            = new QAction(tr("&Справка"), this);
+    validateUi();
 
-    connect(choosingTheme, &QAction::triggered, this, &MainWindow::getListThemes);
-    connect(testing,       &QAction::triggered, this, &MainWindow::onTestingClicked);
-    connect(trainingManual,&QAction::triggered, this, &MainWindow::onTrainingManualButtonClicked);
-    connect(setting,       &QAction::triggered, this, &MainWindow::onSettingClicked);
-    connect(help,          &QAction::triggered, this, &MainWindow::onHelpClicked);
+    if (!ui->menubar) {
+        qDebug() << "setupMenuBar: menubar is nullptr";
+        return;
+    }
 
+    // Создание действий
+    QAction* const choosingTheme = new QAction(tr("&Темы"), this);
+    QAction* const testing = new QAction(tr("&Тест"), this);
+    QAction* const trainingManual = new QAction(tr("&Методичка"), this);
+    QAction* const setting = new QAction(tr("&Настройки"), this);
+    QAction* const help = new QAction(tr("&Справка"), this);
+
+    // Подключение сигналов
+    connect(choosingTheme, &QAction::triggered, this, &MainWindow::onChoosingThemeClicked);
+    connect(testing, &QAction::triggered, this, &MainWindow::onTestingClicked);
+    connect(trainingManual, &QAction::triggered, this, &MainWindow::onTrainingManualButtonClicked);
+    connect(setting, &QAction::triggered, this, &MainWindow::onSettingClicked);
+    connect(help, &QAction::triggered, this, &MainWindow::onHelpClicked);
+
+    // Добавление в меню
     ui->menubar->addAction(choosingTheme);
     ui->menubar->addAction(testing);
     ui->menubar->addAction(trainingManual);
     ui->menubar->addAction(setting);
     ui->menubar->addAction(help);
 
-    ui->menubar->setStyleSheet(
-        "QMenuBar {"
-        "   background-color: #FFDEAD;"
-        "   color: black;"
-        "   font-size: 16px;"
-        "   font-weight: bold;"
-        "}"
-        "QMenuBar::item {"
-        "   spacing: 3px;"
-        "   padding: 5px;"
-        "}"
-        "QMenuBar::item:selected {"
-        "   background-color: #2E2E2E;"
-        "   border: 2px solid #FF0000;"
-        "}"
-        );
-    connect(ui->pushButtonNext, &QPushButton::clicked, this, &MainWindow::onPushButtonNextClicked);
-    connect(ui->pushButtonEndTest, &QPushButton::clicked, this, &MainWindow::onPushButtonEndTestClicked);
-    connect(ui->pushButtonPrevious, &QPushButton::clicked, this, &MainWindow::onPushButtonPreviousClicked);
-    connect(ui->pushButtonTestBreak, &QPushButton::clicked, this, &MainWindow::onTestBreakClicked);
+    // Настройка стиля
+    setupMenuBarStyle();
 }
-void MainWindow::setupStatusBar() {
-    if (!dbFacade->openDatabaseQPSQL("localhost", "iSmile", "postgres",
-                                    "800900", 5432)) {
-        QString msg = "Невозможно открыть БД.";
-        QMessageBox::critical(nullptr, "Ошибка", "Не удалось запустить приложение. " + msg);
-        Label[1]->setText(msg);
-        QCoreApplication::exit(1);
-    }
-    setupStatusBarLabels();
 
-    QString condition = " Where n="+QString::number(selectedIndex);
-    QString tableName = "tasks";
-    QString fieldName = "task";
+void MainWindow::setupMenuBarStyle() {
+    if (!ui->menubar) return;
 
-    QString htmlValue = dbFacade->getValueFromDB<QString>(fieldName,
-                                                          tableName,
-                                                          condition);
-
-    QString q1 ="<!--<body background=";
-    int index = htmlValue.indexOf(q1);
-
-    if (index != -1) {
-        QString ThemahtmlValue=htmlValue.left(index);
-        ThemahtmlValue = htmlValue.left(index).simplified();
-
-        Label[0]->setText(ThemahtmlValue);
-    }
-    QString timeTest = QString("Время теста: %1 мин").
-                       arg(QString::number(state.testExecutionTime,
-                                           'f', 2));
-    Label[1]->setText(timeTest);
+    // Настройка стиля
+    ui->menubar->setStyleSheet(UiConstants::MENUBAR_STYLE);
 }
+
+void MainWindow::setupTestButtons() {
+    validateUi();
+
+    // Вспомогательная лямбда для безопасного подключения
+    auto safeConnect = [this](QPushButton* button, void (MainWindow::*slot)()) {
+        if (button) {
+            connect(button, &QPushButton::clicked, this, slot);
+        } else {
+            qDebug() << "setupTestButtons: button is nullptr";
+        }
+    };
+
+    safeConnect(ui->pushButtonNext, &MainWindow::onPushButtonNextClicked);
+    safeConnect(ui->pushButtonEndTest, &MainWindow::onPushButtonEndTestClicked);
+    safeConnect(ui->pushButtonPrevious, &MainWindow::onPushButtonPreviousClicked);
+    safeConnect(ui->pushButtonTestBreak, &MainWindow::onTestBreakClicked);
+}
+
+// void MainWindow::setupStatusBar() {
+//     if (!dbFacade->openDatabaseQPSQL("localhost", "iSmile", "postgres",
+//                                     "800900", 5432)) {
+//         QString msg = "Невозможно открыть БД.";
+//         QMessageBox::critical(nullptr, "Ошибка", "Не удалось запустить приложение. " + msg);
+//         Label[1]->setText(msg);
+//         QCoreApplication::exit(1);
+//     }
+//     setupStatusBarLabels();
+
+//     QString condition = " Where n="+QString::number(selectedIndex);
+//     QString tableName = "tasks";
+//     QString fieldName = "task";
+
+//     QString htmlValue = dbFacade->getValueFromDB<QString>(fieldName,
+//                                                           tableName,
+//                                                           condition);
+
+//     QString q1 ="<!--<body background=";
+//     int index = htmlValue.indexOf(q1);
+
+//     if (index != -1) {
+//         QString ThemahtmlValue=htmlValue.left(index);
+//         ThemahtmlValue = htmlValue.left(index).simplified();
+
+//         Label[0]->setText(ThemahtmlValue);
+//     }
+//     QString timeTest = QString("Время теста: %1 мин").
+//                        arg(QString::number(state.testExecutionTime,
+//                                            'f', 2));
+//     Label[1]->setText(timeTest);
+// }
 
 void MainWindow::settingTab(){
     //--------------------------------------------------
@@ -140,22 +322,94 @@ void MainWindow::settingTab(){
     customTabAnime->layout()->addWidget(stretchLabel);
     ui->tabWidget->addTab(customTabAnime,"customTabAnime");
     ui->tabWidget->addTab(customTab,"customTab");
-    saveTabsAndWidgets();
+    saveTabWidgets();
     showOnlyThisTab(customTabAnime);
     hideAllTestControls();
 }
 
-void MainWindow::getListThemes(){
-    QString tableName = "tasks";
-    QString fieldName = "task";
-    QString condition="";
-    QStringList stringList;
-    stringList=dbFacade->getRecordsDatabaseQPSQL(fieldName,
-                                                tableName,
-                                                condition);
+// Основная функция (Facade)
+void MainWindow::onChoosingThemeClicked() {
+    validateUi();
 
-    onChooseThemeClicked(stringList);
+    if (!isDatabaseValid()) {
+        logError("Database facade is not initialized");
+        return;
+    }
+
+    const QStringList themes = fetchThemesFromDatabase();
+
+    if (!validateThemesList(themes)) {
+        logError("Failed to load themes from database");
+        return;
+    }
+
+    displayThemesMenu(themes);
 }
+
+// 1. Проверка валидности БД (Single Responsibility)
+bool MainWindow::isDatabaseValid() const {
+    if (!dbFacade) {
+        qDebug() << "isDatabaseValid: dbFacade is nullptr";
+        return false;
+    }
+    return true;
+}
+
+// 2. Получение тем из БД (Single Responsibility)
+// QStringList MainWindow::fetchThemesFromDatabase() {
+//     using namespace DbConstants;
+
+//     const QString tableName = THEMES_TABLE_NAME ;
+//     const QString fieldName = THEMES_FIELD_NAME;
+//     const QString condition;
+
+//     return dbFacade->getRecordsDatabaseQPSQL(fieldName, tableName, condition);
+// }
+QStringList MainWindow:: fetchThemesFromDatabase() {
+    using namespace DbConstants;
+    const QString tableName = THEMES_TABLE_NAME ;
+    const QString fieldName = THEMES_FIELD_NAME;
+    const QString condition;
+
+    QStringList themes = dbFacade->getRecordsDatabaseQPSQL(fieldName, tableName, condition);
+    m_cachedThemeCount = themes.size();  // Обновляем кэш
+    return themes;
+}
+
+// 3. Валидация списка тем (Single Responsibility)
+bool MainWindow::validateThemesList(const QStringList& themes) const {
+    if (themes.isEmpty()) {
+        qDebug() << "validateThemesList: themes list is empty";
+        return false;
+    }
+
+    if (themes.contains("")) {
+        qDebug() << "validateThemesList: themes list contains empty string";
+        return false;
+    }
+
+    return true;
+}
+
+// 4. Отображение меню тем (Single Responsibility)
+void MainWindow::displayThemesMenu(const QStringList& themes) {
+    if (themes.isEmpty()) {
+        qDebug() << "displayThemesMenu: cannot display empty themes list";
+        return;
+    }
+
+    onChooseThemeClicked(themes);
+    qDebug() << "displayThemesMenu: displayed" << themes.size() << "themes";
+}
+
+// 5. Логирование ошибок (Single Responsibility)
+void MainWindow::logError(const QString& error) const {
+    qDebug() << "getListThemes Error:" << error;
+    // Можно добавить запись в файл лога
+    // Можно показать сообщение пользователю
+}
+
+
 
 void MainWindow::onChooseThemeClicked(const QStringList& stringList) {
     QMenu themeMenu(tr("Выбор темы"), this);
@@ -194,34 +448,80 @@ void MainWindow::changeTheme(const QString& theme, int index) {
     Label[1]->setText(timeString);
 }
 
-void MainWindow::saveTabsAndWidgets() {
-     savedWidgets.clear();
-    for (int i = 0; i < ui->tabWidget->count(); ++i) {
+// void MainWindow::saveTabsAndWidgets() {
+//      savedWidgets.clear();
+//     for (int i = 0; i < ui->tabWidget->count(); ++i) {
 
-        QWidget* widget = ui->tabWidget->widget(i);
-        if (widget) {
-            savedWidgets.append(widget);
+//         QWidget* widget = ui->tabWidget->widget(i);
+//         if (widget) {
+//             savedWidgets.append(widget);
+//         }
+//      }
+// }
+void MainWindow::saveTabWidgets() {//Использование STL алгоритмов (C++17)
+    validateUi();
+
+    if (!ui->tabWidget) {
+        qDebug() << "saveTabsAndWidgets: tabWidget is nullptr";
+        return;
+    }
+
+    const int tabCount = ui->tabWidget->count();
+    QVector<QWidget*> widgets;
+    widgets.reserve(tabCount);  // Предварительное выделение памяти
+
+    for (int i = 0; i < tabCount; ++i) {
+        if (QWidget* const widget = ui->tabWidget->widget(i)) {
+            widgets.append(widget);
         }
-     }
+    }
+
+    savedWidgets = std::move(widgets);  // Эффективное перемещение
 }
 
- void MainWindow::restoreTabsAndWidgets() {
-    validateUi();  // Фатальная ошибка если ui == nullptr
+ // void MainWindow::restoreTabsAndWidgets() {
+ //    validateUi();  // Фатальная ошибка если ui == nullptr
 
-     ui->tabWidget->tabBar()->show();
-     ui->tabWidget->tabBar()->setStyleSheet("");
+ //     ui->tabWidget->tabBar()->show();
+ //     ui->tabWidget->tabBar()->setStyleSheet("");
 
-     while (ui->tabWidget->count() > 0) {
-         ui->tabWidget->removeTab(0);
-     }
-     for (QWidget* widget : savedWidgets) {
-         if (widget) {
-             QString tabText = widget->objectName();
-             ui->tabWidget->addTab(widget, tabText);
+ //     while (ui->tabWidget->count() > 0) {
+ //         ui->tabWidget->removeTab(0);
+ //     }
+ //     for (QWidget* widget : savedWidgets) {
+ //         if (widget) {
+ //             QString tabText = widget->objectName();
+ //             ui->tabWidget->addTab(widget, tabText);
 
-         }
-     }
- }
+ //         }
+ //     }
+ // }
+void MainWindow::restoreTabsAndWidgets() {
+    validateUi();
+
+    if (!ui->tabWidget) {
+        qDebug() << "restoreTabsAndWidgets: tabWidget is nullptr";
+        return;
+    }
+
+    if (ui->tabWidget->tabBar()) {
+        ui->tabWidget->tabBar()->show();
+        ui->tabWidget->tabBar()->setStyleSheet("");
+    }
+
+    while (ui->tabWidget->count() > 0) {
+        QWidget* widget = ui->tabWidget->widget(0);
+        ui->tabWidget->removeTab(0);
+        if (widget) widget->deleteLater();
+    }
+
+     for (QWidget* const widget : savedWidgets) {
+        if (widget) {
+            const QString tabText = widget->objectName();
+            ui->tabWidget->addTab(widget, tabText);
+        }
+    }
+}
 
  // Основная функция
  void MainWindow::showOnlyThisTab(QWidget* widget) {
@@ -378,15 +678,15 @@ void MainWindow::setupStretchRadioButtons() {
 
     // Отключаем старые соединения, чтобы избежать дублирования
     disconnect(ui->radioButtonStretch, &QRadioButton::clicked,
-               this, &MainWindow::radioButtonsStretch_clicked);
+               this, &MainWindow::onRadioButtonStretchClicked);
     disconnect(ui->radioButtonNoStretch, &QRadioButton::clicked,
-               this, &MainWindow::radioButtonsStretch_clicked);
+               this, &MainWindow::onRadioButtonStretchClicked);
 
     // Устанавливаем новые соединения
     connect(ui->radioButtonStretch, &QRadioButton::clicked,
-            this, &MainWindow::radioButtonsStretch_clicked);
+            this, &MainWindow::onRadioButtonStretchClicked);
     connect(ui->radioButtonNoStretch, &QRadioButton::clicked,
-            this, &MainWindow::radioButtonsStretch_clicked);
+            this, &MainWindow::onRadioButtonStretchClicked);
 }
 
 // 4. Настройка фона
@@ -424,17 +724,71 @@ void MainWindow::ensureCentralWidget() {
     }
 }
 //=======================================================
-void MainWindow::radioButtonsStretch_clicked() {
+// void MainWindow::radioButtonsStretch_clicked() {
 
-    if (ui->radioButtonNoStretch->isChecked()) {
-        this->setFixedSize(800, 800);
-    } else if (ui->radioButtonStretch->isChecked()) {
-        this->setFixedSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+//     if (ui->radioButtonNoStretch->isChecked()) {
+//         this->setFixedSize(800, 800);
+//     } else if (ui->radioButtonStretch->isChecked()) {
+//         this->setFixedSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
 
+//     }
+// }
+
+#include "constants.h"
+
+// Основная функция (Facade)
+void MainWindow::onRadioButtonStretchClicked() {
+    validateUi();
+
+    if (!areRadioButtonsValid()) {
+        qDebug() << "onStretchModeChanged: radio buttons not initialized";
+        return;
+    }
+
+    if (isNoStretchModeEnabled()) {
+        setFixedWindowSize(UiConstants::FIXED_WINDOW_WIDTH, UiConstants::FIXED_WINDOW_HEIGHT);
+    } else if (isStretchModeEnabled()) {
+        setStretchWindowSize();
     }
 }
 
+// 1. Проверка валидности радио-кнопок (Single Responsibility)
+bool MainWindow::areRadioButtonsValid() const {
+    return ui->radioButtonNoStretch && ui->radioButtonStretch;
+}
 
+// 2. Проверка режима "No Stretch" (Single Responsibility)
+bool MainWindow::isNoStretchModeEnabled() const {
+    return ui->radioButtonNoStretch && ui->radioButtonNoStretch->isChecked();
+}
+
+// 3. Проверка режима "Stretch" (Single Responsibility)
+bool MainWindow::isStretchModeEnabled() const {
+    return ui->radioButtonStretch && ui->radioButtonStretch->isChecked();
+}
+
+// 4. Установка фиксированного размера (Single Responsibility)
+void MainWindow::setFixedWindowSize(int width, int height) {
+    setFixedSize(width, height);
+    qDebug() << "Window size set to fixed:" << width << "x" << height;
+}
+
+// 5. Установка растянутого размера (Single Responsibility)
+void MainWindow::setStretchWindowSize() {
+    // Альтернативный подход вместо QWIDGETSIZE_MAX
+    const QRect screenGeometry = QApplication::primaryScreen()->geometry();
+    setFixedSize(screenGeometry.width(), screenGeometry.height());
+
+    // Или использовать максимальный размер
+    // setFixedSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+
+    qDebug() << "Window size set to stretch mode";
+}
+
+// // Старая функция для обратной совместимости
+// void MainWindow::radioButtonsStretch_clicked() {
+//     onStretchModeChanged();
+// }
 void MainWindow::onHelpClicked() {
     // Основная функция
     // if (!ui) {
@@ -462,10 +816,6 @@ void MainWindow::ensureCorrectCentralWidget() {
 
 // 2.Настройка UI для вкладки Help
 void MainWindow::setupHelpTabUI() {
-    // if (!ui) {
-    //     qDebug() << "setupHelpTabUI: ui is nullptr";
-    //     return;
-    // }
     validateUi();
 
     restoreTabsAndWidgets();
@@ -486,20 +836,13 @@ void MainWindow::loadHelpContent() {
         return;
     }
 
-    const QString fieldNameHtm = HelpConfig::HTML_FIELD;
-    const QString tableNameHtm = HelpConfig::TABLE_NAME;
-    const QString fieldNameFileGraph = HelpConfig::GRAPH_FIELD_FILENAME;
-    const QString fieldNameImageData = HelpConfig::GRAPH_FIELD_DATA;
-    const QString tableNameGraph = HelpConfig::GRAPH_TABLE_NAME;
-    const QString condition;  // Пустая строка по умолчанию
-
-    loadBrowser(ui->textBrowserHelp,
-                fieldNameHtm,
-                tableNameHtm,
-                fieldNameFileGraph,
-                fieldNameImageData,
-                tableNameGraph,
-                condition);
+    loadContentIntoBrowser(ui->textBrowserHelp,
+                           HelpConfig::HTML_FIELD,
+                           HelpConfig::TABLE_NAME,
+                           HelpConfig::GRAPH_FIELD_FILENAME,
+                           HelpConfig::GRAPH_FIELD_DATA,
+                           HelpConfig::GRAPH_TABLE_NAME,
+                           "");
 }
 //====================================================
 
@@ -532,7 +875,7 @@ void MainWindow::onTestingClicked() {
                                                           tableName,
                                                           condition);
     htmlValue = htmlValue.simplified();
-    readStyleSheet(htmlValue);
+    setStyleSheetBackground(htmlValue);
 
     const QString fieldNameHtm = "task";
     const QString tableNameHtm = "tasks";
@@ -541,7 +884,7 @@ void MainWindow::onTestingClicked() {
     const QString tableNameGraph = "graphtest";
     const QString conditionGraph = "Where idtasks=" + QString::number(selectedIndex);
 
-    uploadingGraphFiles2(fieldNameFileGraph,
+    saveGraphFilesToDisk(fieldNameFileGraph,
                          fieldNameImageData,
                          tableNameGraph,
                          conditionGraph);
@@ -620,7 +963,7 @@ void MainWindow::onTrainingManualButtonClicked(){
     }
     const QString condition="Where idtasks="+QString::number(selectedIndex);
 
-    loadBrowser(ui->textBrowserMet,
+    loadContentIntoBrowser(ui->textBrowserMet,
                 ManualConstants::TEXT_FIELD,
                 ManualConstants::TABLE_NAME,
                 ManualConstants::GRAPH_FIELD,
@@ -630,82 +973,273 @@ void MainWindow::onTrainingManualButtonClicked(){
 }
 
 
-void MainWindow::setupRadioButtons(int maxRadioBut) {
-    if (ui->frameRadioButton->layout() != nullptr) {
-        QLayoutItem* item;
-        while ((item = ui->frameRadioButton->layout()->takeAt(0)) != nullptr) {
-            if (item->widget()) {
-                item->widget()->deleteLater();
-            }
-            delete item;
-        }
-        delete ui->frameRadioButton->layout();
-    }
-    auto* layoutRadioButton = new QVBoxLayout(ui->frameRadioButton);
-    ui->frameRadioButton->setLayout(layoutRadioButton);
+// void MainWindow::setupRadioButtons(int maxRadioBut) {
+//     if (ui->frameRadioButton->layout() != nullptr) {
+//         QLayoutItem* item;
+//         while ((item = ui->frameRadioButton->layout()->takeAt(0)) != nullptr) {
+//             if (item->widget()) {
+//                 item->widget()->deleteLater();
+//             }
+//             delete item;
+//         }
+//         delete ui->frameRadioButton->layout();
+//     }
+//     auto* layoutRadioButton = new QVBoxLayout(ui->frameRadioButton);
+//     ui->frameRadioButton->setLayout(layoutRadioButton);
 
-    for (int i = 0; i < maxRadioBut; ++i) {
-        auto* radioButton = new QRadioButton(QString::number(i + 1));
-        radioButton->setStyleSheet("QRadioButton {"
-                                   "   font-size: 16px;"
-                                   "   color: #4682B4;"
-                                   "   font-weight: bold;"
-                                   "   background-color: #FFFFFF;"
-                                   "}"
-                                   "QRadioButton::indicator {"
-                                   "   width: 30px;"
-                                   "   height: 30px;"
-                                   "}");
-        layoutRadioButton->addWidget(radioButton);
-        connect(radioButton, &QRadioButton::clicked, this, &MainWindow::onRadioButtonClicked);
+//     for (int i = 0; i < maxRadioBut; ++i) {
+//         auto* radioButton = new QRadioButton(QString::number(i + 1));
+//         radioButton->setStyleSheet("QRadioButton {"
+//                                    "   font-size: 16px;"
+//                                    "   color: #4682B4;"
+//                                    "   font-weight: bold;"
+//                                    "   background-color: #FFFFFF;"
+//                                    "}"
+//                                    "QRadioButton::indicator {"
+//                                    "   width: 30px;"
+//                                    "   height: 30px;"
+//                                    "}");
+//         layoutRadioButton->addWidget(radioButton);
+//         connect(radioButton, &QRadioButton::clicked, this, &MainWindow::onRadioButtonClicked);
+//     }
+// }
+
+
+// Основная функция (Facade)
+void MainWindow::setupDynamicRadioButtons(int maxRadioBut) {
+    validateUi();
+
+    if (!isValidButtonCount(maxRadioBut)) {
+        qDebug() << "setupRadioButtons: invalid button count" << maxRadioBut;
+        return;
+    }
+
+    if (!ui->frameRadioButton) {
+        qDebug() << "setupRadioButtons: frameRadioButton is nullptr";
+        return;
+    }
+
+    clearRadioButtonPanel();
+    createDynamicRadioButtonLayout();
+    createDynamicRadioButtons(maxRadioBut);
+}
+
+// 1.Валидация количества кнопок
+bool MainWindow::isValidButtonCount(int count) const {
+    return count >= UiConstants::MIN_RADIO_BUTTONS && count <= MAX_ANSWER;
+}
+
+// 2.Очистка панели радио-кнопок
+void MainWindow::clearRadioButtonPanel() {
+    if (!ui->frameRadioButton) return;
+
+    QLayout* oldLayout = ui->frameRadioButton->layout();
+    if (!oldLayout) return;
+
+    // Безопасное удаление всех виджетов и layout
+    QLayoutItem* item;
+    while ((item = oldLayout->takeAt(0)) != nullptr) {
+        if (QWidget* widget = item->widget()) {
+            widget->deleteLater();
+        }
+        delete item;
+    }
+
+    delete oldLayout;
+    ui->frameRadioButton->setLayout(nullptr);
+}
+
+// 3.Создание layout для радио-кнопок
+void MainWindow::createDynamicRadioButtonLayout() {
+    if (!ui->frameRadioButton) return;
+
+    auto* layout = new QVBoxLayout(ui->frameRadioButton);
+    ui->frameRadioButton->setLayout(layout);
+}
+
+// 4.Создание всех радио-кнопок
+void MainWindow::createDynamicRadioButtons(int count) {
+    if (!ui->frameRadioButton || !ui->frameRadioButton->layout()) {
+        qDebug() << "createRadioButtons: layout is not initialized";
+        return;
+    }
+
+    for (int i = 0; i < count; ++i) {
+        QRadioButton* button = createSingleRadioButton(i);
+        ui->frameRadioButton->layout()->addWidget(button);
+        connectRadioButton(button);
     }
 }
-void MainWindow::setupPushButtons(int maxPushButtons,int colCount) {
-    if (ui->framTasksButton->layout() != nullptr) {
-        QLayoutItem* item;
-        while ((item = ui->framTasksButton->layout()->takeAt(0)) != nullptr) {
-            if (item->widget()) {
-                item->widget()->deleteLater();
-            }
-            delete item;
-        }
-        delete ui->framTasksButton->layout();
+
+// 5.Создание одной радио-кнопки
+QRadioButton* MainWindow::createSingleRadioButton(int index) {
+    const QString buttonText = QString::number(index + 1);
+    auto* radioButton = new QRadioButton(buttonText);
+    applyRadioButtonStyle(radioButton);
+    return radioButton;
+}
+
+// 6.Применение стиля к кнопке
+void MainWindow::applyRadioButtonStyle(QRadioButton* button) {
+    using namespace UiConstants;
+    button->setStyleSheet(RADIO_BUTTON_STYLE);
+}
+
+// 7.Подключение сигнала
+void MainWindow::connectRadioButton(QRadioButton* button) {
+    connect(button, &QRadioButton::clicked, this, &MainWindow::onRadioButtonClicked);
+}
+
+// void MainWindow::setupPushButtons(int maxPushButtons,int colCount) {
+//     if (ui->framTasksButton->layout() != nullptr) {
+//         QLayoutItem* item;
+//         while ((item = ui->framTasksButton->layout()->takeAt(0)) != nullptr) {
+//             if (item->widget()) {
+//                 item->widget()->deleteLater();
+//             }
+//             delete item;
+//         }
+//         delete ui->framTasksButton->layout();
+//     }
+
+//     QGridLayout *layout = new QGridLayout(ui->framTasksButton);
+
+//     for (int i = 0; i < maxPushButtons; ++i) {
+//         pushButton[i] = new QPushButton(QString::number(i + 1)); // Установка текста на кнопке
+
+//         if(i==0){
+//             pushButton[i]->setStyleSheet("color: white;"
+//                                          "border-color: red;"
+//                                          "background-color: #4CAF50; "
+//                                          "font-weight: bold;"
+//                                          " padding: 2px 2px;"
+//                                          " text-align: center;"
+//                                          " text-decoration: none;"
+//                                          " font-size: 16px;");
+//         }
+//         else{
+//             pushButton[i]->setStyleSheet("color: black;"
+//                                          "border-color: black;"
+//                                          "background-color:#4CAF50; "
+//                                          "font-weight: bold;"
+//                                          " padding: 2px 2px;"
+//                                          " text-align: center;"
+//                                          " text-decoration: none;"
+//                                          " font-size: 16px;");
+//         }
+//         pushButton[i]->setFixedSize(30, 30);
+//         pushButton[i]->setProperty("index", i);
+//         connect(pushButton[i], &QPushButton::clicked, this, &MainWindow::onPushButtonClicked);
+
+//         layout->addWidget(pushButton[i], i / colCount, i % colCount);
+
+//     }
+// }
+
+// Основная функция (Facade)
+void MainWindow::setupPushButtons(int maxPushButtons, int colCount) {
+    validateUi();
+
+    using namespace UiConstants;
+
+    if (!arePushButtonParamsValid(maxPushButtons, colCount)) {
+        qDebug() << "setupPushButtons: invalid parameters - buttons:"
+                 << maxPushButtons << "columns:" << colCount;
+        return;
     }
 
-    QGridLayout *layout = new QGridLayout(ui->framTasksButton);
+    if (!ui->framTasksButton) {
+        qDebug() << "setupPushButtons: framTasksButton is nullptr";
+        return;
+    }
 
+    clearPushButtonPanel();
+    createPushButtonLayout();
+    createAllPushButtons(maxPushButtons, colCount);
+}
+
+// 1. Валидация параметров (Single Responsibility)
+bool MainWindow::arePushButtonParamsValid(int maxPushButtons, int colCount) const {
+    using namespace UiConstants;
+    return maxPushButtons > 0 && maxPushButtons <= MAX_TASK && colCount > 0;
+}
+
+// 2. Очистка панели кнопок (Single Responsibility)
+void MainWindow::clearPushButtonPanel() {
+    if (!ui->framTasksButton) return;
+
+    QLayout* oldLayout = ui->framTasksButton->layout();
+    if (!oldLayout) return;
+
+    // Безопасное удаление всех виджетов и layout
+    QLayoutItem* item;
+    while ((item = oldLayout->takeAt(0)) != nullptr) {
+        if (QWidget* widget = item->widget()) {
+            widget->deleteLater();
+        }
+        delete item;
+    }
+
+    delete oldLayout;
+    ui->framTasksButton->setLayout(nullptr);
+}
+
+// 3. Создание layout для кнопок (Single Responsibility)
+void MainWindow::createPushButtonLayout() {
+    if (!ui->framTasksButton) return;
+
+    auto* layout = new QGridLayout(ui->framTasksButton);
+    ui->framTasksButton->setLayout(layout);
+}
+
+// 4. Создание всех кнопок (Single Responsibility)
+void MainWindow::createAllPushButtons(int maxPushButtons, int colCount) {
     for (int i = 0; i < maxPushButtons; ++i) {
-        pushButton[i] = new QPushButton(QString::number(i + 1)); // Установка текста на кнопке
-
-        if(i==0){
-            pushButton[i]->setStyleSheet("color: white;"
-                                         "border-color: red;"
-                                         "background-color: #4CAF50; "
-                                         "font-weight: bold;"
-                                         " padding: 2px 2px;"
-                                         " text-align: center;"
-                                         " text-decoration: none;"
-                                         " font-size: 16px;");
-        }
-        else{
-            pushButton[i]->setStyleSheet("color: black;"
-                                         "border-color: black;"
-                                         "background-color:#4CAF50; "
-                                         "font-weight: bold;"
-                                         " padding: 2px 2px;"
-                                         " text-align: center;"
-                                         " text-decoration: none;"
-                                         " font-size: 16px;");
-        }
-        pushButton[i]->setFixedSize(30, 30);
-        pushButton[i]->setProperty("index", i);
-        connect(pushButton[i], &QPushButton::clicked, this, &MainWindow::onPushButtonClicked);
-
-        layout->addWidget(pushButton[i], i / colCount, i % colCount);
-
+        QPushButton* button = createSinglePushButton(i);
+        configurePushButton(button, i);
+        addPushButtonToLayout(button, i, colCount);
     }
 }
 
+// 5. Создание одной кнопки (Single Responsibility)
+QPushButton* MainWindow::createSinglePushButton(int index) {
+    const QString buttonText = QString::number(index + 1);
+    return new QPushButton(buttonText);
+}
+
+// 6. Применение стиля к кнопке (Single Responsibility)
+void MainWindow::applyPushButtonStyle(QPushButton* button, int index) {
+    using namespace UiConstants;
+
+    const QString& style = (index == 0) ? FIRST_BUTTON_STYLE : DEFAULT_BUTTON_STYLE;
+    button->setStyleSheet(style);
+}
+
+// 7. Настройка кнопки (Single Responsibility)
+void MainWindow::configurePushButton(QPushButton* button, int index) {
+    using namespace UiConstants;
+
+    applyPushButtonStyle(button, index);
+    button->setFixedSize(BUTTON_SIZE, BUTTON_SIZE);
+    button->setProperty("index", index);
+    connect(button, &QPushButton::clicked, this, &MainWindow::onPushButtonClicked);
+}
+
+// 8. Добавление кнопки в layout (Single Responsibility)
+void MainWindow::addPushButtonToLayout(QPushButton* button, int index, int colCount) {
+    if (!ui->framTasksButton || !ui->framTasksButton->layout()) {
+        qDebug() << "addPushButtonToLayout: layout is not initialized";
+        return;
+    }
+
+    const int row = index / colCount;
+    const int col = index % colCount;
+
+    auto* gridLayout = qobject_cast<QGridLayout*>(ui->framTasksButton->layout());
+    if (gridLayout) {
+        gridLayout->addWidget(button, row, col);
+    }
+}
 //=================================================
 // Главная функция - только координация
 void MainWindow::setupTestInterface() {
@@ -721,7 +1255,7 @@ void MainWindow::setupTestInterface() {
     uploadingBrowser();
 
     int maxRadioBut=num_cur_task.ctest[0].saveTotalAnswer;
-    setupRadioButtons(maxRadioBut);
+    setupDynamicRadioButtons(maxRadioBut);
     const int rowCount = (totalQuestions < 20) ? 1 : 2;
     const int colCount = (totalQuestions % rowCount == 0) ? (totalQuestions / rowCount) : (totalQuestions / rowCount + 1);
     setupPushButtons(totalQuestions,colCount);
@@ -767,7 +1301,7 @@ void MainWindow::setupStatusBarLabels() {
 
     QFont labelFont = createLabelFont();
 
-    for (int i = 0; i < MAX_LABEL; ++i) {
+    for (int i = 0; i < UiConstants::MAX_LABEL; ++i) {
         QLabel* label = createStatusLabel(i, labelFont);
         addLabelToStatusBar(label);
         storeLabelPointer(i, label);
@@ -787,7 +1321,7 @@ bool MainWindow::isStatusBarValid() const {
 //Очистка старых лейблов (предотвращение утечек)
 void MainWindow::cleanupStatusBarLabels() {
     // Удаляем существующие лейблы из statusbar
-    for (int i = 0; i < MAX_LABEL; ++i) {
+    for (int i = 0; i < UiConstants::MAX_LABEL; ++i) {
         if (Label[i]) {
             ui->statusbar->removeWidget(Label[i]);
             delete Label[i];
@@ -857,7 +1391,7 @@ void MainWindow::addLabelToStatusBar(QLabel* label) {
 
 //  Сохранение указателя на лейбл
 void MainWindow::storeLabelPointer(int index, QLabel* label) {
-    if (index >= 0 && index < MAX_LABEL) {  // Проверка границ!
+    if (index >= 0 && index < UiConstants::MAX_LABEL) {  // Проверка границ!
         Label[index] = label;
     } else {
         qWarning() << "Label index out of bounds:" << index;
@@ -1387,7 +1921,7 @@ void MainWindow::testGrade(){
      }
      ready_madeTasks = 0;
      tGrade = 0;
-     delFileDir(state.pathGraph);
+     clearDirectory(state.pathGraph);
      ui->menubar->show();
 
      qDebug() << "Test completed. Grade:" << sGrade << "Score:" << tGrade << "/" << totalQuestion;
@@ -1477,7 +2011,7 @@ void MainWindow::testGrade(){
 
      // Очистка временных файлов
      if (!state.pathGraph.isEmpty()) {
-         delFileDir(state.pathGraph);
+         clearDirectory(state.pathGraph);
      }
 
      // Восстановление UI
@@ -1518,7 +2052,7 @@ void MainWindow::closeEvent(QCloseEvent* event) {
     }
 
     // Только при подтверждении выхода
-    delFileDir(state.pathGraph);
+    clearDirectory(state.pathGraph);
 
     if (!ui->lineEditGraph->text().isEmpty()) {
         state.pathGraph = ui->lineEditGraph->text();
@@ -1547,42 +2081,89 @@ MainWindow::~MainWindow(){
 }
 
 
-void MainWindow:: loadBrowser(QTextBrowser* textBrowser,
-                              QString fieldNameHtm,
-                              QString tableNameHtm,
-                              QString fieldNameFileGraph,
-                              QString fieldNameImageData,
-                              QString tableNameGraph,
-                              QString condition ){
+// void MainWindow:: loadBrowser(QTextBrowser* textBrowser,
+//                               QString fieldNameHtm,
+//                               QString tableNameHtm,
+//                               QString fieldNameFileGraph,
+//                               QString fieldNameImageData,
+//                               QString tableNameGraph,
+//                               QString condition ){
 
-    QStringList stringListFileName = dbFacade->getListFromDB<QString>(
-                                            fieldNameFileGraph,
-                                            tableNameGraph,
-                                            condition);
+//     QStringList stringListFileName = dbFacade->getListFromDB<QString>(
+//                                             fieldNameFileGraph,
+//                                             tableNameGraph,
+//                                             condition);
 
-    QList<QByteArray> stringListImageData = dbFacade->getListFromDB<QByteArray>(
-                                                fieldNameImageData,
-                                                tableNameGraph,
-                                                condition);
-    QString dirName=state.pathGraph;//+"/";
+//     QList<QByteArray> stringListImageData = dbFacade->getListFromDB<QByteArray>(
+//                                                 fieldNameImageData,
+//                                                 tableNameGraph,
+//                                                 condition);
+//     QString dirName=state.pathGraph;//+"/";
 
-    saveFiles(stringListFileName,
-              stringListImageData,
-              dirName) ;
-    condition="";
+//     saveFiles(stringListFileName,
+//               stringListImageData,
+//               dirName) ;
+//     condition="";
 
-    QString htmlValue = dbFacade->getValueFromDB<QString>(fieldNameHtm,
-                                                          tableNameHtm,
-                                                          condition);
+//     QString htmlValue = dbFacade->getValueFromDB<QString>(fieldNameHtm,
+//                                                           tableNameHtm,
+//                                                           condition);
 
-    QString fullHtml=num_cur_task.insertPath(htmlValue, state.pathGraph);
+//     QString fullHtml=num_cur_task.insertPath(htmlValue, state.pathGraph);
 
-    readStyleSheet(fullHtml);
+//     readStyleSheet(fullHtml);
+//     textBrowser->clear();
+//     textBrowser->setStyleSheet(styleSheet);
+//     textBrowser->setHtml(fullHtml);
+
+// }
+
+void MainWindow::loadContentIntoBrowser(QTextBrowser* textBrowser,
+                             const QString& fieldNameHtm,
+                             const QString& tableNameHtm,
+                             const QString& fieldNameFileGraph,
+                             const QString& fieldNameImageData,
+                             const QString& tableNameGraph,
+                             const QString& condition) {
+    validateUi();
+
+    // Проверки
+    if (!textBrowser) {
+        qDebug() << "loadBrowser: textBrowser is nullptr";
+        return;
+    }
+
+    if (!dbFacade) {
+        qDebug() << "loadBrowser: dbFacade is nullptr";
+        return;
+    }
+
+    // Загрузка медиафайлов
+    const QStringList stringListFileName = dbFacade->getListFromDB<QString>(
+        fieldNameFileGraph, tableNameGraph, condition);
+
+    const QList<QByteArray> stringListImageData = dbFacade->getListFromDB<QByteArray>(
+        fieldNameImageData, tableNameGraph, condition);
+
+    const QString dirName = state.pathGraph;
+
+    if (!stringListFileName.isEmpty() && !stringListImageData.isEmpty()) {
+        saveFiles(stringListFileName, stringListImageData, dirName);
+    }
+
+    // Загрузка и обработка HTML
+    const QString htmlValue = dbFacade->getValueFromDB<QString>(
+        fieldNameHtm, tableNameHtm, condition);
+
+    const QString fullHtml = num_cur_task.insertPath(htmlValue, state.pathGraph);
+
+    // Отображение
+    setStyleSheetBackground(fullHtml);
     textBrowser->clear();
     textBrowser->setStyleSheet(styleSheet);
     textBrowser->setHtml(fullHtml);
-
 }
+
 void MainWindow:: saveFiles(const QStringList& stringListFileName,
                             const QList<QByteArray>& stringListImageData,
                             const QString& dirName) {
@@ -1618,117 +2199,378 @@ void MainWindow:: saveFiles(const QStringList& stringListFileName,
         file.close();
     }
 }
-void MainWindow::delFileDir(QString path){
+
+// void MainWindow::delFileDir(QString path){
+//     QDir dir(path);
+//     if (dir.exists()) {
+//         QStringList files = dir.entryList(QDir::Files);
+
+//         foreach (const QString &file, files) {
+//             if (dir.remove(file)) {
+//                 //qDebug() << "Удален файл:" << file;
+//             } else {
+//                 qDebug() << "Не удалось удалить файл:" << file;
+//             }
+//         }
+//     } else {
+//         qDebug() << "Папка не найдена:" << path;
+//     }
+// }
+
+void MainWindow::clearDirectory(const QString path) {
+    // Проверка пустого пути
+    if (path.isEmpty()) {
+        qDebug() << "delFileDir: path is empty";
+        return;
+    }
+
     QDir dir(path);
-    if (dir.exists()) {
-        QStringList files = dir.entryList(QDir::Files);
 
-        foreach (const QString &file, files) {
-            if (dir.remove(file)) {
-                //qDebug() << "Удален файл:" << file;
-            } else {
-                qDebug() << "Не удалось удалить файл:" << file;
-            }
+    // Проверка существования директории
+    if (!dir.exists()) {
+        qDebug() << "delFileDir: directory not found:" << path;
+        return;
+    }
+
+    // Получение списка файлов
+    const QStringList files = dir.entryList(QDir::Files);
+
+    // Удаление файлов
+    for (const QString& file : files) {  // ✅ Используем range-based for
+        if (!dir.remove(file)) {
+            qDebug() << "delFileDir: failed to remove file:" << file;
         }
-    } else {
-        qDebug() << "Папка не найдена:" << path;
     }
+
+    qDebug() << "delFileDir: removed" << files.size() << "files from" << path;
 }
 
-void MainWindow::readStyleSheet(QString html){
-    QString startSequence = "<!--<";
-    QString endSequence = "-->";
-    QString allBackgraund=readFileNameBackgraund( html,startSequence,endSequence);
+void MainWindow::setStyleSheetBackground(const QString& html) {  // const reference
+    validateUi();  // Проверка
 
-    if(allBackgraund.isEmpty())
-      return;
 
-    startSequence = "background=\"";
-    endSequence = "\" ";
-    QString filenameBackgraund=readFileNameBackgraund( allBackgraund,startSequence,endSequence);
-    if(filenameBackgraund.isEmpty())
-      return;
-    QString pathDirGraph = state.pathGraph;
+    QString backgroundBlock = extractFileNameFromHtml(html,
+                                        HtmlConstants ::BACKGROUND_BLOCK_START,
+                                        HtmlConstants ::BACKGROUND_BLOCK_END);
+    if (backgroundBlock.isEmpty()) return;
 
-    styleSheet ="background-image:url(\""
-                 +pathDirGraph+"/"
-                 +filenameBackgraund +"\")";
+
+    const QString filename = extractFileNameFromHtml(backgroundBlock,
+                                        HtmlConstants ::BACKGROUND_ATTR_START,
+                                        HtmlConstants ::BACKGROUND_ATTR_END);
+    if (filename.isEmpty()) return;
+
+    // Проверка пути
+    const QString pathDirGraph = state.pathGraph;
+    if (pathDirGraph.isEmpty()) {
+        qDebug() << "readStyleSheet: pathGraph is empty";
+        return;
+    }
+
+    // Формирование стиля
+    styleSheet = "background-image: url(\"" +
+                 pathDirGraph + "/" +
+                 filename + "\")";
 }
-    QString MainWindow::readFileNameBackgraund(QString html, QString startSequence,QString endSequence){
-    QString found="не найдено регулярное выражение для последовательности!"+startSequence+"(.*?)"+ endSequence;
-    QRegularExpression regex(startSequence+"(.*?)"+endSequence);
-    QRegularExpressionMatch match = regex.match(html);
+
+QString MainWindow::extractFileNameFromHtml(const QString& html,
+                                           const QString& startSequence,
+                                           const QString& endSequence) const {
+    const QString regexPattern = startSequence + "(.*?)" + endSequence;
+    const QRegularExpression regex(regexPattern);
+
+    if (!regex.isValid()) {
+        qDebug() << "readFileNameBackground: invalid regex pattern:" << regexPattern;
+        return QString();
+    }
+
+    const QRegularExpressionMatch match = regex.match(html);
+
     if (match.hasMatch()) {
-       found = match.captured(1);
-    }else {
-       qDebug() <<found;
+        return match.captured(1);
     }
-    return found;
+
+    const QString errorMessage = "Pattern not found: " + startSequence + "..." + endSequence;
+    qDebug() << errorMessage;
+    return QString();
 }
 
-void MainWindow::uploadingGraphFiles2(QString fieldNameFileGraph,
-                                      QString fieldNameImageData,
-                                      QString tableNameGraph,
-                                      QString condition ){
 
-    QStringList stringListFileName = dbFacade->getListFromDB<QString>(
-                                                fieldNameFileGraph,
-                                                tableNameGraph,
-                                                condition);
-    QList<QByteArray> stringListImageData = dbFacade->getListFromDB<QByteArray>(
-                                                fieldNameImageData,
-                                                tableNameGraph,
-                                                condition);
-    QString dirName=state.pathGraph;//+"/";
+// void MainWindow::uploadingGraphFiles(QString fieldNameFileGraph,
+//                                       QString fieldNameImageData,
+//                                       QString tableNameGraph,
+//                                       QString condition ){
 
-    saveFiles(stringListFileName,
-              stringListImageData,
-              dirName) ;
+//     QStringList stringListFileName = dbFacade->getListFromDB<QString>(
+//                                                 fieldNameFileGraph,
+//                                                 tableNameGraph,
+//                                                 condition);
+//     QList<QByteArray> stringListImageData = dbFacade->getListFromDB<QByteArray>(
+//                                                 fieldNameImageData,
+//                                                 tableNameGraph,
+//                                                 condition);
+//     QString dirName=state.pathGraph;//+"/";
+
+//     saveFiles(stringListFileName,
+//               stringListImageData,
+//               dirName) ;
+// }
+void MainWindow::saveGraphFilesToDisk(const QString& fieldNameFileGraph,
+                                     const QString& fieldNameImageData,
+                                     const QString& tableNameGraph,
+                                     const QString& condition) {
+    validateUi();
+
+    // Проверка dbFacade
+    if (!dbFacade) {
+        qDebug() << "uploadingGraphFiles: dbFacade is nullptr";
+        return;
+    }
+
+    // Проверка пути
+    if (state.pathGraph.isEmpty()) {
+        qDebug() << "uploadingGraphFiles: state.pathGraph is empty";
+        return;
+    }
+
+    const QStringList fileNames = dbFacade->getListFromDB<QString>(
+        fieldNameFileGraph,
+        tableNameGraph,
+        condition);
+
+    const QList<QByteArray> imageDataList = dbFacade->getListFromDB<QByteArray>(
+        fieldNameImageData,
+        tableNameGraph,
+        condition);
+
+    // Проверка, что размеры списков совпадают
+    if (fileNames.size() != imageDataList.size()) {
+        qDebug() << "uploadingGraphFiles: size mismatch - fileNames:"
+                 << fileNames.size() << "imageData:" << imageDataList.size();
+        return;
+    }
+
+    const QString dirName = state.pathGraph;
+    saveFiles(fileNames, imageDataList, dirName);
 }
 
-void MainWindow::setServiceStatus(const QString &status) {
-    Label[1]->setText(status);
+// void MainWindow::setServiceStatus(const QString &status) {
+//     Label[1]->setText(status);
+// }
+void MainWindow::setServiceStatus(const QString& status) {
+    validateUi();  // Проверка ui
+
+    //Проверка индекса
+       if (UiConstants::SERVICE_LABEL_INDEX >= UiConstants::MAX_LABEL) {
+        qDebug() << "setServiceStatus: label index out of range";
+        return;
+    }
+
+    //Проверка на nullptr
+    if (!Label[UiConstants::SERVICE_LABEL_INDEX]) {
+        qDebug() << "setServiceStatus: Label[1] is nullptr";
+        return;
+    }
+
+    Label[UiConstants::SERVICE_LABEL_INDEX]->setText(status);
 }
 
-void MainWindow::showProgressBar(float  testExecutionTime){
-    totalTime = static_cast<int>(testExecutionTime * 60);
-    ui->progressBar->setRange(0, totalTime);
-    ui->progressBar->setValue(0);
+
+// Основная функция
+void MainWindow::showProgressBar(float testExecutionTime) {
+    validateUi();
+
+    using namespace UiConstants;
+
+    // 1.Валидация
+    if (!isValidTime(testExecutionTime)) {
+        qDebug() << "showProgressBar: invalid time" << testExecutionTime;
+        return;
+    }
+
+    // 2.Проверка progressBar
+    if (!ui->progressBar) {
+        qDebug() << "showProgressBar: progressBar is nullptr";
+        return;
+    }
+
+    // 3.Расчет времени
+    totalTime = static_cast<int>(testExecutionTime * SECONDS_PER_MINUTE);
+
+    // 4.Настройка прогресс-бара
+    setupProgressBar(totalTime);
+    setupProgressBarStyle();
+    setupProgressBarFont();
+
+    // 5.Настройка таймера
+    setupTimer();
+}
+
+// 1.Валидация времени
+bool  MainWindow::isValidTime(float testExecutionTime) const {
+    return testExecutionTime > 0.0f && testExecutionTime < 1000.0f;  // Разумный предел
+}
+
+// 2.Настройка диапазона прогресс-бара
+void MainWindow::setupProgressBar(int totalSeconds) {
+    using namespace UiConstants;
+
+    ui->progressBar->setRange(PROGRESS_BAR_MIN_VALUE, totalSeconds);
+    ui->progressBar->setValue(PROGRESS_BAR_MIN_VALUE);
     ui->progressBar->setTextVisible(true);
-    ui->progressBar->setStyleSheet("QProgressBar {"
-                                   "background-color: #f0f0f0;"
-                                   "border: 2px solid #8f8f8f;"
-                                   "border-radius: 5px;"
-                                   "text-align: center;"
-                                   "}"
-                                   "QProgressBar::chunk {"
-                                   "background-color: #228B22;"
-                                   "border-radius: 5px;"
-                                   "}");
+    ui->progressBar->show();
+}
+
+// 3.Настройка стиля прогресс-бара
+void MainWindow::setupProgressBarStyle() {
+    using namespace UiConstants;
+
+    ui->progressBar->setStyleSheet(PROGRESS_BAR_STYLE);
+}
+
+// 4.Настройка шрифта прогресс-бара
+void MainWindow::setupProgressBarFont() {
+    using namespace UiConstants;
+
     QFont font = ui->progressBar->font();
     font.setBold(true);
-    font.setPointSize(10);
+    font.setPointSize(PROGRESS_BAR_FONT_SIZE);
     ui->progressBar->setFont(font);
-    ui->progressBar->show();
-    timer = new QTimer(this);
-    connect(timer, &QTimer::timeout, this, &MainWindow::updateProgress);
-    timer->start(1000);
 }
 
-void MainWindow::updateProgress() {
-    if (currentTime < totalTime ) {
-        currentTime++;
-        ui->progressBar->setValue(currentTime);
-        int remainingTime = (totalTime ) - currentTime;
-        QTime time(0, 0);
-        time = time.addSecs(remainingTime);
-        Label[1]->setText("Текущее время теста: "+time.toString("mm:ss"));
-    } else {
-        timer->stop();
-        Label[1]->setText("Тест завершен!");
-        currentTime=0;
-        disconnect(timer, &QTimer::timeout, this, &MainWindow::updateProgress);
-        onPushButtonEndTestClicked();
+// 5. Настройка таймера
+void MainWindow::setupTimer() {
+    // Очистка старого таймера
+    cleanupOldTimer();
+
+    timer = new QTimer(this);
+
+    // Отключаем старые соединения, чтобы избежать дублирования
+    disconnect(timer, &QTimer::timeout, this, &MainWindow::updateProgress);
+
+    connect(timer, &QTimer::timeout, this, &MainWindow::updateProgress);
+    timer->start(UiConstants::TIMER_INTERVAL_MS);
+}
+
+// 6. Очистка старого таймера
+void MainWindow::cleanupOldTimer() {
+    if (timer) {
+        if (timer->isActive()) {
+            timer->stop();
+        }
+        timer->deleteLater();  // Безопасное удаление
+        timer = nullptr;
     }
 }
 
+// void MainWindow::updateProgress() {
+//     if (currentTime < totalTime ) {
+//         currentTime++;
+//         ui->progressBar->setValue(currentTime);
+//         int remainingTime = (totalTime ) - currentTime;
+//         QTime time(0, 0);
+//         time = time.addSecs(remainingTime);
+//         Label[1]->setText("Текущее время теста: "+time.toString("mm:ss"));
+//     } else {
+//         timer->stop();
+//         Label[1]->setText("Тест завершен!");
+//         currentTime=0;
+//         disconnect(timer, &QTimer::timeout, this, &MainWindow::updateProgress);
+//         onPushButtonEndTestClicked();
+//     }
+// }
+
+
+// Основная функция
+void MainWindow::updateProgress() {
+    validateUi();
+
+    if (!isProgressComplete()) {
+        // Обновление прогресса
+        updateProgressValue();
+
+        const int remainingSeconds = totalTime - currentTime;
+        updateProgressDisplay(remainingSeconds);
+    } else {
+        // Завершение теста
+        finishTest();
+    }
+}
+
+// 1.Проверка завершения
+bool MainWindow::isProgressComplete() const {
+    return currentTime >= totalTime;
+}
+
+// 2.Обновление значения прогресса
+void MainWindow::updateProgressValue() {
+    if (currentTime < totalTime) {
+        currentTime++;
+        updateProgressBar(currentTime);
+    }
+}
+
+// 3.Обновление отображения прогресса
+void MainWindow::updateProgressDisplay(int remainingSeconds) {
+    using namespace UiConstants;
+
+    QTime time(0, 0);
+    time = time.addSecs(remainingSeconds);
+    const QString timeString = time.toString(TIME_FORMAT);
+    const QString statusText = PROGRESS_TEXT_PREFIX + timeString;
+
+    updateStatusLabel(statusText);
+}
+
+// 4.Завершение теста
+void MainWindow::finishTest() {
+    stopAndDisconnectTimer();
+    resetProgressState();
+    updateStatusLabel(UiConstants::TEST_COMPLETED_TEXT);
+    onPushButtonEndTestClicked();
+}
+
+// 5.Сброс состояния прогресса
+void MainWindow::resetProgressState() {
+    currentTime = 0;
+    if (ui->progressBar) {
+        ui->progressBar->setValue(0);
+    }
+}
+
+// 6.Обновление статусной метки
+void MainWindow::updateStatusLabel(const QString& text) {
+    if (Label[1]) {
+        Label[1]->setText(text);
+    } else {
+        qDebug() << "updateStatusLabel: Label[1] is nullptr";
+    }
+}
+
+// 7.Обновление прогресс-бара
+void MainWindow::updateProgressBar(int value) {
+    if (ui->progressBar) {
+        ui->progressBar->setValue(value);
+    } else {
+        qDebug() << "updateProgressBar: progressBar is nullptr";
+    }
+}
+
+// 8.Остановка и отключение таймера
+void MainWindow::stopAndDisconnectTimer() {
+    if (timer) {
+        if (timer->isActive()) {
+            timer->stop();
+        }
+        disconnect(timer, &QTimer::timeout, this, &MainWindow::updateProgress);
+    } else {
+        qDebug() << "stopAndDisconnectTimer: timer is nullptr";
+    }
+}
+int MainWindow::getMaxThemeIndex() const {
+    if (m_cachedThemeCount == -1) {
+        // Принудительно загружаем, если еще не загружено
+        const_cast<MainWindow*>(this)->fetchThemesFromDatabase();
+    }
+    return m_cachedThemeCount;
+}

@@ -54,14 +54,7 @@ QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
-namespace ManualConstants {
-// Используем constexpr для эффективности
-inline constexpr char TEXT_FIELD[] = "met";
-inline constexpr char TABLE_NAME[] = "tasks";
-inline constexpr char GRAPH_FIELD[] = "filename";
-inline constexpr char IMAGE_FIELD[] = "graph";
-inline constexpr char GRAPH_TABLE[] = "graphmet";
-}
+
 class DBFacade ;
 
 class MainWindow : public QMainWindow {
@@ -96,8 +89,8 @@ public:
     QString styleSheet="";
 private:
     //static const int maximumNumberlabel = 2;
-    static const int MAX_LABEL = 2;
-    QLabel* Label[MAX_LABEL];
+    //static const int MAX_LABEL = 2;
+    QLabel* Label[UiConstants::MAX_LABEL];
     QMovie *movie = new QMovie(this);
     StretchLabel *stretchLabel = new StretchLabel(this);
     CalculateGrade *calckgrade= new CalculateGrade();
@@ -192,36 +185,99 @@ private slots:
         void showTestLabel();
         void showWidgets(const QList<QWidget*>& widgets);
 
-    void saveTabsAndWidgets();
+    void saveTabWidgets();
     void restoreTabsAndWidgets();
-    void loadBrowser(QTextBrowser*textBrowser,
-                    QString fieldNameHtm,
-                    QString tableNameHtm,
-                    QString fieldNameFileGraph,
-                    QString fieldNameImageData,
-                    QString tableNameGraph,
-                    QString condition );
-    QString readFileNameBackgraund(QString html,
-                                   QString startSequence,
-                                   QString endSequence);
-    void delFileDir(QString path);
-    void readStyleSheet(QString html);
 
-    void uploadingGraphFiles2(QString fieldNameFileGraph,
-                             QString fieldNameImageData,
-                             QString tableNameGraph,
-                             QString condition );
+    void loadContentIntoBrowser(QTextBrowser* textBrowser,
+                                 const QString& fieldNameHtm,
+                                 const QString& tableNameHtm,
+                                 const QString& fieldNameFileGraph,
+                                 const QString& fieldNameImageData,
+                                 const QString& tableNameGraph,
+                                 const QString& condition);
+
+    QString extractFileNameFromHtml(const QString& html,
+                                    const QString& startSequence,
+                                    const QString& endSequence) const ;
+    void clearDirectory(const QString path);
+    void setStyleSheetBackground(const QString& html);
+    void saveGraphFilesToDisk(const QString& fieldNameFileGraph,
+                             const QString& fieldNameImageData,
+                             const QString& tableNameGraph,
+                             const QString& condition);
+
     void setServiceStatus(const QString &status);
-    void showProgressBar(float  testExecutionTime);
-    void updateProgress() ;
-    void radioButtonsStretch_clicked();
 
-    void setupRadioButtons(int maxRadioBut);
+    void showProgressBar(float testExecutionTime);
+        bool isValidTime(float testExecutionTime) const;
+        void setupProgressBar(int totalSeconds);
+        void setupProgressBarStyle();
+        void setupProgressBarFont();
+        void setupTimer();
+        void cleanupOldTimer();
+
+    void updateProgress();
+        bool isProgressComplete() const;
+        void updateProgressValue();
+        void updateProgressDisplay(int remainingSeconds);
+        void finishTest();
+        void resetProgressState();
+        void updateStatusLabel(const QString& text);
+        void updateProgressBar(int value);
+        void stopAndDisconnectTimer();
+
+
+    void onRadioButtonStretchClicked();
+        bool areRadioButtonsValid() const ;
+        bool isStretchModeEnabled() const;
+        bool isNoStretchModeEnabled() const;
+        void setFixedWindowSize(int width, int height);
+        void setStretchWindowSize();
+
+    void setupDynamicRadioButtons(int maxRadioBut);
+        bool isValidButtonCount(int count) const;
+        void clearRadioButtonPanel();
+        void createDynamicRadioButtonLayout();
+        void createDynamicRadioButtons(int count);
+        QRadioButton* createSingleRadioButton(int index);
+        void applyRadioButtonStyle(QRadioButton* button);
+        void connectRadioButton(QRadioButton* button);
+
     void setupPushButtons (int maxPushButtons,int colCount);
-    void getListThemes();
+        bool arePushButtonParamsValid(int maxPushButtons, int colCount) const;
+        void clearPushButtonPanel();
+        void createPushButtonLayout();
+        void createAllPushButtons(int maxPushButtons, int colCount);
+        QPushButton* createSinglePushButton(int index);
+        void applyPushButtonStyle(QPushButton* button, int index);
+        void configurePushButton(QPushButton* button, int index);
+        void addPushButtonToLayout(QPushButton* button, int index, int colCount);
+
+    void onChoosingThemeClicked();
+        bool isDatabaseValid() const;
+        QStringList fetchThemesFromDatabase();
+        bool validateThemesList(const QStringList& themes) const;
+        void displayThemesMenu(const QStringList& themes);
+        void logError(const QString& error) const;
+
     void setupMenuBar();
+        void setupMenuBarStyle();
+        void setupTestButtons();
+
     void setupStatusBar() ;
+        bool initializeDatabaseConnection();
+        void showDatabaseErrorAndExit(const QString& errorMsg);
+        void updateStatusLabels();
+        QString extractThemeFromHtml(const QString& html);
+        void updateThemeLabel();
+        void updateTimeLabel();
+        bool areStatusLabelsValid() const;
+
     void restoreStateMainWindow();
+        void restoreWindowGeometry();
+        void restoreSelectedThemeIndex();
+        void restoreGraphPath();
+
     void monitoringServices(QString serviceName);
     void settingTab();
     void loadImageData(QByteArray imageData);
@@ -232,5 +288,7 @@ private slots:
 
 private:
     Ui::MainWindow *ui;
+    mutable int m_cachedThemeCount = -1;// Используется для кэширования числа тем
+    int getMaxThemeIndex() const;
 };
 #endif // MAINWINDOW_H
