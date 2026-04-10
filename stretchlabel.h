@@ -8,9 +8,23 @@
 #include <QPixmap>
 #include <QFileInfo>
 
+// class StretchLabel : public QLabel
+// {
+//     Q_OBJECT
+// public:
+//     explicit StretchLabel(QWidget *parent = nullptr);
+//     void setGif(const QString &filePath);
+
+// protected:
+//     void paintEvent(QPaintEvent *event) override;
+
+// private:
+//     QMovie *movie;
+// };
 class StretchLabel : public QLabel
 {
     Q_OBJECT
+
 public:
     explicit StretchLabel(QWidget *parent = nullptr);
     void setGif(const QString &filePath);

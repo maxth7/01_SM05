@@ -278,13 +278,42 @@ private slots:
         void restoreSelectedThemeIndex();
         void restoreGraphPath();
 
-    void monitoringServices(QString serviceName);
-    void settingTab();
-    void loadImageData(QByteArray imageData);
+    void ensureServiceIsRunning(const QString& serviceName);
+        bool isServiceRunning(const QString& serviceName) ;
+        void showServiceErrorAndExit(const QString& serviceName);
+        void updateStatusLabelServiceIsRunning(const QString& message);
+        void exitApplicationWithError(int exitCode = 1);
+        bool areServiceCheckPrerequisitesValid() const;
+
+ //   void settingTab();
+    void setupCustomTabs();
+        bool areCustomTabsValid() const;
+        void setupAnimationLabel();
+        void configureCustomTabWidgets();
+        void ensureLayoutExists();
+        void addTabsToTabWidget();
+        void applyTabStyles();
+
+    void loadImageData(const QByteArray& imageData);
+        bool prepareImageDisplay();
+        void setupGraphicsView();
+        void setupCustomTabLayout();
+        void addGraphicsViewToLayout(QGraphicsView* graphicsView);
+        void displayImageInGraphicsView(const QImage& image);
+        void cleanupOldScene(QGraphicsView* graphicsView);
+        bool loadImageFromData(const QByteArray& imageData, QImage& image) const;
+
 
     void saveFiles(const QStringList& stringListFileName,
                    const QList<QByteArray>& stringListImageData,
-                   const QString& dirName);
+                   const QString& dirName)const;
+        bool ensureDirectoryExists(const QString& dirPath) const;
+        bool saveSingleFile(const QString& directoryPath,
+                            const QString& fileName,
+                            const QByteArray& data) const;
+        bool isValidFileData(const QString& fileName, const QByteArray& data) const;
+        void logFileError(const QString& error, const QString& filePath) const;
+
 
 private:
     Ui::MainWindow *ui;

@@ -100,6 +100,20 @@ constexpr int DEFAULT_WINDOW_POSITION_Y = 0;
 constexpr int MIN_THEME_INDEX = 0;  // 0-based index
 constexpr int DEFAULT_THEME_INDEX = 0;
 
+// Tab names
+inline constexpr const char* TAB_ANIME_OBJECT_NAME = "tabCustomTabAnime";
+inline constexpr const char* TAB_CUSTOM_OBJECT_NAME = "tabcustomTab";
+inline constexpr const char* TAB_ANIME_DISPLAY_NAME = "customTabAnime";
+inline constexpr const char* TAB_CUSTOM_DISPLAY_NAME = "customTab";
+
+// Tab styles
+inline constexpr const char* TAB_ANIME_STYLE = "QTabWidget::pane { border: none; }";
+
+// Animation path
+inline constexpr const char* ANIMATION_GIF_PATH = ":/images/Tesla/tesla_m_s.gif";
+
+// Graphics view style
+inline constexpr const char* GRAPHICS_VIEW_STYLE = "QGraphicsView { border: none; }";
 }
 
 namespace HelpConfig {
@@ -146,5 +160,30 @@ inline constexpr char BACKGROUND_ATTR_END[] = "\" ";
 
 inline constexpr const char* BODY_BACKGROUND_PATTERN = "<!--<body background=";
 }
+namespace ErrorMessages {
+inline constexpr const char* APP_START_FAILED = "Не удалось запустить приложение. ";
+inline constexpr const char* SERVICE_NOT_RUNNING = "Служба: %1 не запущена.";
+}
+namespace SettingsConstants {
+// File name
+inline constexpr const char* SETTINGS_FILE = "settings.ini";
 
+// Groups
+inline constexpr const char* GROUP_MAIN_WINDOW = "MainWindow";
+inline constexpr const char* GROUP_PATH_GRAPH = "pathGraph";
+inline constexpr const char* GROUP_CURRENT_THEMA = "CurrentThema";
+inline constexpr const char* GROUP_TEST_TIME = "testExecutionTime";
+
+// Keys
+inline constexpr const char* KEY_POS = "pos";
+inline constexpr const char* KEY_SIZE = "size";
+inline constexpr const char* KEY_PATH = "path";
+inline constexpr const char* KEY_CURRENT_THEMA = "CurrentThema";
+inline constexpr const char* KEY_TEST_TIME = "testExecutionTime";
+
+// Default values
+inline const QPoint DEFAULT_POS = QPoint(0, 0);
+inline const QSize DEFAULT_SIZE = QSize(0, 0);
+inline constexpr float DEFAULT_TEST_TIME = 0.0f;
+}
 #endif // CONSTANTS_H

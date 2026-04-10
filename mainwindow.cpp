@@ -17,39 +17,86 @@ MainWindow::MainWindow(QWidget *parent)
     setupMenuBar();
 
     QString serviceName="postgresql-x64-17";
-    monitoringServices(serviceName);
+    ensureServiceIsRunning(serviceName);
 
     setupStatusBar();
-    settingTab();
+    setupCustomTabs();
 }
 
-void MainWindow::monitoringServices(QString serviceName){
-    if(!ChServices.isPostgresServiceRunning(serviceName)) {
-        QString msg = "Служба: " + serviceName + " не запущена.";
-        QMessageBox::critical(nullptr,
-                              "Ошибка",
-                              "Не удалось запустить приложение. " + msg);
-        Label[0]->setText(msg);
-        QCoreApplication::exit(1);
+// void MainWindow::monitoringServices(QString serviceName){
+//     if(!ChServices.isPostgresServiceRunning(serviceName)) {
+//         QString msg = "Служба: " + serviceName + " не запущена.";
+//         QMessageBox::critical(nullptr,
+//                               "Ошибка",
+//                               "Не удалось запустить приложение. " + msg);
+//         Label[0]->setText(msg);
+//         QCoreApplication::exit(1);
+//     }
+// }
+#include "constants.h"
+
+// Основная функция
+void MainWindow::ensureServiceIsRunning(const QString& serviceName) {
+    validateUi();
+
+    if (!areServiceCheckPrerequisitesValid()) {
+        exitApplicationWithError();
+        return;
+    }
+
+    if (!isServiceRunning(serviceName)) {
+        showServiceErrorAndExit(serviceName);
     }
 }
 
-// void MainWindow::restoreStateMainWindow() {
-//     state.RestoreState(pos, size);
-//     QRect screenGeometry = QGuiApplication::primaryScreen()->geometry();
+// 1. Проверка предварительных условий
+bool MainWindow::areServiceCheckPrerequisitesValid() const {
+    // Проверка Label[0]
+    if (!Label[0]) {
+        qDebug() << "areServiceCheckPrerequisitesValid: Label[0] is nullptr";
+        return false;
+    }
 
-//     if (!screenGeometry.contains(QRect(pos, size))) {
-//         pos = QPoint(0, 0);
-//         size = QSize(800, 600);
-//     }
-//     this->move(pos);
-//     this->resize(size);
-//     selectedIndex=state.CurrentThema-1;
-//     if (selectedIndex<1){
-//         selectedIndex=1;
-//     }
-//     ui->lineEditGraph->setText(state.pathGraph);
-// }
+    return true;
+}
+
+// 2. Проверка статуса службы
+bool MainWindow::isServiceRunning(const QString& serviceName)  {
+    return ChServices.isPostgresServiceRunning(serviceName);
+}
+
+// 3. Отображение ошибки и выход
+void MainWindow::showServiceErrorAndExit(const QString& serviceName) {
+    using namespace ErrorMessages;
+
+    const QString errorMsg = QString(SERVICE_NOT_RUNNING).arg(serviceName);
+    const QString fullMsg = APP_START_FAILED + errorMsg;
+
+    // Показываем сообщение пользователю
+    QMessageBox::critical(this, "Ошибка", fullMsg);
+
+    // Обновляем статусную метку
+    updateStatusLabelServiceIsRunning(errorMsg);
+
+    // Завершаем приложение
+    exitApplicationWithError();
+}
+
+// 4. Обновление статусной метки
+void MainWindow::updateStatusLabelServiceIsRunning(const QString& message) {
+    if (Label[0]) {
+        Label[0]->setText(message);
+    } else {
+        qDebug() << "updateStatusLabel: Label[0] is nullptr";
+    }
+}
+
+// 5. Корректный выход из приложения
+void MainWindow::exitApplicationWithError(int exitCode) {
+    qDebug() << "exitApplicationWithError: exiting with code" << exitCode;
+    QCoreApplication::exit(exitCode);
+}
+
 void MainWindow::restoreStateMainWindow() {
     validateUi();
 
@@ -112,7 +159,7 @@ void MainWindow::restoreGraphPath() {
     }
 }
 
-// Основная функция (Facade)
+// Основная функция
 void MainWindow::setupStatusBar() {
     validateUi();
 
@@ -272,62 +319,121 @@ void MainWindow::setupTestButtons() {
     safeConnect(ui->pushButtonTestBreak, &MainWindow::onTestBreakClicked);
 }
 
-// void MainWindow::setupStatusBar() {
-//     if (!dbFacade->openDatabaseQPSQL("localhost", "iSmile", "postgres",
-//                                     "800900", 5432)) {
-//         QString msg = "Невозможно открыть БД.";
-//         QMessageBox::critical(nullptr, "Ошибка", "Не удалось запустить приложение. " + msg);
-//         Label[1]->setText(msg);
-//         QCoreApplication::exit(1);
+
+// void MainWindow::settingTab(){
+//     //--------------------------------------------------
+//     stretchLabel->setGif(":/images/Tesla/tesla_m_s.gif");
+
+//     customTabAnime->setObjectName("tabCustomTabAnime");
+//     customTabAnime->setStyleSheet("QTabWidget::pane { border: none; }");
+
+//     customTab->setObjectName("tabcustomTab"); // было не задано
+//     QLayout *layout = customTabAnime->layout();
+
+//     if (!customTabAnime->layout()) {
+//         customTabAnime->setLayout(new QVBoxLayout(customTabAnime));
 //     }
-//     setupStatusBarLabels();
-
-//     QString condition = " Where n="+QString::number(selectedIndex);
-//     QString tableName = "tasks";
-//     QString fieldName = "task";
-
-//     QString htmlValue = dbFacade->getValueFromDB<QString>(fieldName,
-//                                                           tableName,
-//                                                           condition);
-
-//     QString q1 ="<!--<body background=";
-//     int index = htmlValue.indexOf(q1);
-
-//     if (index != -1) {
-//         QString ThemahtmlValue=htmlValue.left(index);
-//         ThemahtmlValue = htmlValue.left(index).simplified();
-
-//         Label[0]->setText(ThemahtmlValue);
-//     }
-//     QString timeTest = QString("Время теста: %1 мин").
-//                        arg(QString::number(state.testExecutionTime,
-//                                            'f', 2));
-//     Label[1]->setText(timeTest);
+//     //--------------------------------------------------------------------------
+//     customTabAnime->layout()->addWidget(stretchLabel);
+//     ui->tabWidget->addTab(customTabAnime,"customTabAnime");
+//     ui->tabWidget->addTab(customTab,"customTab");
+//     saveTabWidgets();
+//     showOnlyThisTab(customTabAnime);
+//     hideAllTestControls();
 // }
 
-void MainWindow::settingTab(){
-    //--------------------------------------------------
-    stretchLabel->setGif(":/images/Tesla/tesla_m_s.gif");
+// Основная функция
+void MainWindow::setupCustomTabs() {
+    validateUi();
 
-    customTabAnime->setObjectName("tabCustomTabAnime");
-    customTabAnime->setStyleSheet("QTabWidget::pane { border: none; }");
-
-    customTab->setObjectName("tabcustomTab"); // было не задано
-    QLayout *layout = customTabAnime->layout();
-
-    if (!customTabAnime->layout()) {
-        customTabAnime->setLayout(new QVBoxLayout(customTabAnime));
+    if (!areCustomTabsValid()) {
+        qDebug() << "setupCustomTabs: required widgets are nullptr";
+        return;
     }
-    //--------------------------------------------------------------------------
-    customTabAnime->layout()->addWidget(stretchLabel);
-    ui->tabWidget->addTab(customTabAnime,"customTabAnime");
-    ui->tabWidget->addTab(customTab,"customTab");
+
+    setupAnimationLabel();
+    configureCustomTabWidgets();
+    ensureLayoutExists();
+    addTabsToTabWidget();
+    applyTabStyles();
+
     saveTabWidgets();
     showOnlyThisTab(customTabAnime);
     hideAllTestControls();
 }
 
-// Основная функция (Facade)
+// 1. Проверка валидности виджетов
+bool MainWindow::areCustomTabsValid() const {
+    if (!stretchLabel) {
+        qDebug() << "areCustomTabsValid: stretchLabel is nullptr";
+        return false;
+    }
+    if (!customTabAnime) {
+        qDebug() << "areCustomTabsValid: customTabAnime is nullptr";
+        return false;
+    }
+    if (!customTab) {
+        qDebug() << "areCustomTabsValid: customTab is nullptr";
+        return false;
+    }
+    if (!ui->tabWidget) {
+        qDebug() << "areCustomTabsValid: tabWidget is nullptr";
+        return false;
+    }
+    return true;
+}
+
+// 2. Настройка анимации
+void MainWindow::setupAnimationLabel() {
+    using namespace UiConstants;
+
+    stretchLabel->setGif(ANIMATION_GIF_PATH);
+    qDebug() << "setupAnimationLabel: animation loaded from" << ANIMATION_GIF_PATH;
+}
+
+// 3. Конфигурация виджетов вкладок
+void MainWindow::configureCustomTabWidgets() {
+    using namespace UiConstants;
+
+    customTabAnime->setObjectName(TAB_ANIME_OBJECT_NAME);
+    customTab->setObjectName(TAB_CUSTOM_OBJECT_NAME);
+}
+
+// 4. Обеспечение существования layout
+void MainWindow::ensureLayoutExists() {
+    if (!customTabAnime->layout()) {
+        auto* layout = new QVBoxLayout(customTabAnime);
+        customTabAnime->setLayout(layout);
+        qDebug() << "ensureLayoutExists: created new layout for customTabAnime";
+    } else {
+        qDebug() << "ensureLayoutExists: layout already exists";
+    }
+}
+
+// 5. Добавление вкладок в tabWidget
+void MainWindow::addTabsToTabWidget() {
+    using namespace UiConstants;
+
+    // Добавляем layout->addWidget(stretchLabel) отдельно
+    if (customTabAnime->layout()) {
+        customTabAnime->layout()->addWidget(stretchLabel);
+    }
+
+    ui->tabWidget->addTab(customTabAnime, TAB_ANIME_DISPLAY_NAME);
+    ui->tabWidget->addTab(customTab, TAB_CUSTOM_DISPLAY_NAME);
+
+    qDebug() << "addTabsToTabWidget: added tabs"
+             << TAB_ANIME_DISPLAY_NAME << "and" << TAB_CUSTOM_DISPLAY_NAME;
+}
+
+// 6. Применение стилей
+void MainWindow::applyTabStyles() {
+    using namespace UiConstants;
+
+    customTabAnime->setStyleSheet(TAB_ANIME_STYLE);
+}
+
+// Основная функция
 void MainWindow::onChoosingThemeClicked() {
     validateUi();
 
@@ -346,7 +452,7 @@ void MainWindow::onChoosingThemeClicked() {
     displayThemesMenu(themes);
 }
 
-// 1. Проверка валидности БД (Single Responsibility)
+// 1. Проверка валидности БД
 bool MainWindow::isDatabaseValid() const {
     if (!dbFacade) {
         qDebug() << "isDatabaseValid: dbFacade is nullptr";
@@ -355,16 +461,7 @@ bool MainWindow::isDatabaseValid() const {
     return true;
 }
 
-// 2. Получение тем из БД (Single Responsibility)
-// QStringList MainWindow::fetchThemesFromDatabase() {
-//     using namespace DbConstants;
 
-//     const QString tableName = THEMES_TABLE_NAME ;
-//     const QString fieldName = THEMES_FIELD_NAME;
-//     const QString condition;
-
-//     return dbFacade->getRecordsDatabaseQPSQL(fieldName, tableName, condition);
-// }
 QStringList MainWindow:: fetchThemesFromDatabase() {
     using namespace DbConstants;
     const QString tableName = THEMES_TABLE_NAME ;
@@ -376,7 +473,7 @@ QStringList MainWindow:: fetchThemesFromDatabase() {
     return themes;
 }
 
-// 3. Валидация списка тем (Single Responsibility)
+// 3.Валидация списка тем
 bool MainWindow::validateThemesList(const QStringList& themes) const {
     if (themes.isEmpty()) {
         qDebug() << "validateThemesList: themes list is empty";
@@ -391,7 +488,7 @@ bool MainWindow::validateThemesList(const QStringList& themes) const {
     return true;
 }
 
-// 4. Отображение меню тем (Single Responsibility)
+// 4. Отображение меню тем
 void MainWindow::displayThemesMenu(const QStringList& themes) {
     if (themes.isEmpty()) {
         qDebug() << "displayThemesMenu: cannot display empty themes list";
@@ -402,7 +499,7 @@ void MainWindow::displayThemesMenu(const QStringList& themes) {
     qDebug() << "displayThemesMenu: displayed" << themes.size() << "themes";
 }
 
-// 5. Логирование ошибок (Single Responsibility)
+// 5. Логирование ошибок
 void MainWindow::logError(const QString& error) const {
     qDebug() << "getListThemes Error:" << error;
     // Можно добавить запись в файл лога
@@ -736,7 +833,7 @@ void MainWindow::ensureCentralWidget() {
 
 #include "constants.h"
 
-// Основная функция (Facade)
+// Основная функция
 void MainWindow::onRadioButtonStretchClicked() {
     validateUi();
 
@@ -752,28 +849,28 @@ void MainWindow::onRadioButtonStretchClicked() {
     }
 }
 
-// 1. Проверка валидности радио-кнопок (Single Responsibility)
+// 1. Проверка валидности радио-кнопок
 bool MainWindow::areRadioButtonsValid() const {
     return ui->radioButtonNoStretch && ui->radioButtonStretch;
 }
 
-// 2. Проверка режима "No Stretch" (Single Responsibility)
+// 2. Проверка режима "No Stretch"
 bool MainWindow::isNoStretchModeEnabled() const {
     return ui->radioButtonNoStretch && ui->radioButtonNoStretch->isChecked();
 }
 
-// 3. Проверка режима "Stretch" (Single Responsibility)
+// 3. Проверка режима "Stretch"
 bool MainWindow::isStretchModeEnabled() const {
     return ui->radioButtonStretch && ui->radioButtonStretch->isChecked();
 }
 
-// 4. Установка фиксированного размера (Single Responsibility)
+// 4. Установка фиксированного размера
 void MainWindow::setFixedWindowSize(int width, int height) {
     setFixedSize(width, height);
     qDebug() << "Window size set to fixed:" << width << "x" << height;
 }
 
-// 5. Установка растянутого размера (Single Responsibility)
+// 5. Установка растянутого размера
 void MainWindow::setStretchWindowSize() {
     // Альтернативный подход вместо QWIDGETSIZE_MAX
     const QRect screenGeometry = QApplication::primaryScreen()->geometry();
@@ -1005,7 +1102,7 @@ void MainWindow::onTrainingManualButtonClicked(){
 // }
 
 
-// Основная функция (Facade)
+// Основная функция
 void MainWindow::setupDynamicRadioButtons(int maxRadioBut) {
     validateUi();
 
@@ -1136,7 +1233,7 @@ void MainWindow::connectRadioButton(QRadioButton* button) {
 //     }
 // }
 
-// Основная функция (Facade)
+// Основная функция
 void MainWindow::setupPushButtons(int maxPushButtons, int colCount) {
     validateUi();
 
@@ -1158,13 +1255,13 @@ void MainWindow::setupPushButtons(int maxPushButtons, int colCount) {
     createAllPushButtons(maxPushButtons, colCount);
 }
 
-// 1. Валидация параметров (Single Responsibility)
+// 1. Валидация параметров
 bool MainWindow::arePushButtonParamsValid(int maxPushButtons, int colCount) const {
     using namespace UiConstants;
     return maxPushButtons > 0 && maxPushButtons <= MAX_TASK && colCount > 0;
 }
 
-// 2. Очистка панели кнопок (Single Responsibility)
+// 2. Очистка панели кнопок
 void MainWindow::clearPushButtonPanel() {
     if (!ui->framTasksButton) return;
 
@@ -1184,7 +1281,7 @@ void MainWindow::clearPushButtonPanel() {
     ui->framTasksButton->setLayout(nullptr);
 }
 
-// 3. Создание layout для кнопок (Single Responsibility)
+// 3. Создание layout для кнопок
 void MainWindow::createPushButtonLayout() {
     if (!ui->framTasksButton) return;
 
@@ -1192,7 +1289,7 @@ void MainWindow::createPushButtonLayout() {
     ui->framTasksButton->setLayout(layout);
 }
 
-// 4. Создание всех кнопок (Single Responsibility)
+// 4. Создание всех кнопок
 void MainWindow::createAllPushButtons(int maxPushButtons, int colCount) {
     for (int i = 0; i < maxPushButtons; ++i) {
         QPushButton* button = createSinglePushButton(i);
@@ -1201,13 +1298,13 @@ void MainWindow::createAllPushButtons(int maxPushButtons, int colCount) {
     }
 }
 
-// 5. Создание одной кнопки (Single Responsibility)
+// 5. Создание одной кнопки
 QPushButton* MainWindow::createSinglePushButton(int index) {
     const QString buttonText = QString::number(index + 1);
     return new QPushButton(buttonText);
 }
 
-// 6. Применение стиля к кнопке (Single Responsibility)
+// 6. Применение стиля к кнопке
 void MainWindow::applyPushButtonStyle(QPushButton* button, int index) {
     using namespace UiConstants;
 
@@ -1215,7 +1312,7 @@ void MainWindow::applyPushButtonStyle(QPushButton* button, int index) {
     button->setStyleSheet(style);
 }
 
-// 7. Настройка кнопки (Single Responsibility)
+// 7. Настройка кнопки
 void MainWindow::configurePushButton(QPushButton* button, int index) {
     using namespace UiConstants;
 
@@ -1225,7 +1322,7 @@ void MainWindow::configurePushButton(QPushButton* button, int index) {
     connect(button, &QPushButton::clicked, this, &MainWindow::onPushButtonClicked);
 }
 
-// 8. Добавление кнопки в layout (Single Responsibility)
+// 8. Добавление кнопки в layout
 void MainWindow::addPushButtonToLayout(QPushButton* button, int index, int colCount) {
     if (!ui->framTasksButton || !ui->framTasksButton->layout()) {
         qDebug() << "addPushButtonToLayout: layout is not initialized";
@@ -1927,45 +2024,119 @@ void MainWindow::testGrade(){
      qDebug() << "Test completed. Grade:" << sGrade << "Score:" << tGrade << "/" << totalQuestion;
  }
 
- void MainWindow::loadImageData(QByteArray imageData){
+
+ // Основная функция
+ void MainWindow::loadImageData(const QByteArray& imageData) {
+     validateUi();
+
+     if (!prepareImageDisplay()) {
+         qDebug() << "loadImageData: failed to prepare display";
+         return;
+     }
+
+     QImage image;
+     if (!loadImageFromData(imageData, image)) {
+         qDebug() << "loadImageData: failed to load image from data";
+         return;
+     }
+
+     displayImageInGraphicsView(image);
+ }
+
+ // 1.Подготовка к отображению
+ bool MainWindow::prepareImageDisplay() {
+     if (!ui->graphicsViewGrade) {
+         qDebug() << "prepareImageDisplay: graphicsViewGrade is nullptr";
+         return false;
+     }
+
+     if (!customTab) {
+         qDebug() << "prepareImageDisplay: customTab is nullptr";
+         return false;
+     }
 
      restoreTabsAndWidgets();
      showOnlyThisTab(customTab);
      hideAllTestControls();
 
+     setupGraphicsView();
+     setupCustomTabLayout();
+
+     return true;
+ }
+
+ // 2.Настройка GraphicsView
+ void MainWindow::setupGraphicsView() {
+     using namespace UiConstants;
+
      ui->graphicsViewGrade->show();
-     QGraphicsView* graphicsView = ui->graphicsViewGrade;
-     graphicsView->setFrameShape(QFrame::NoFrame);
+     ui->graphicsViewGrade->setFrameShape(QFrame::NoFrame);
+     ui->graphicsViewGrade->setStyleSheet(GRAPHICS_VIEW_STYLE);
 
-     QLayout *layout = customTab->layout();
+     // Очистка старой сцены
+     cleanupOldScene(ui->graphicsViewGrade);
+ }
 
-     if (!layout) {
-         QHBoxLayout* layout = new QHBoxLayout(customTab);
-         layout->addWidget(graphicsView, 0, Qt::AlignCenter);
-         customTab->setLayout(layout);
-     }else{
-         QHBoxLayout *hLayout = qobject_cast<QHBoxLayout*>(layout);
-         if (hLayout) {
-             hLayout->addWidget(graphicsView, 0, Qt::AlignCenter );
-             customTab->setLayout(layout);
-         }
-     }
-     QImage image;
-     if (image.loadFromData(imageData)) {
-         QGraphicsScene* scene = new QGraphicsScene;
-         graphicsView->setScene(scene);
-         scene->addPixmap(QPixmap::fromImage(image));
-         ui->graphicsViewGrade->setFixedSize(image.width(), image.height());
-        // graphicsView->setFrameShape(QFrame::NoFrame);
-         graphicsView->setStyleSheet("QGraphicsView { border: none; }");// показывает скроллинг
-         graphicsView->update();
-         graphicsView->show();
-
-     } else {
-         qDebug() << "Failed to load image from data.";
+ // 3.Очистка старой сцены
+ void MainWindow::cleanupOldScene(QGraphicsView* graphicsView) {
+     if (graphicsView->scene()) {
+         delete graphicsView->scene();
+         graphicsView->setScene(nullptr);
+         qDebug() << "cleanupOldScene: old scene deleted";
      }
  }
 
+ // 4.Настройка layout для customTab
+ void MainWindow::setupCustomTabLayout() {
+     QLayout* existingLayout = customTab->layout();
+
+     if (!existingLayout) {
+         auto* layout = new QHBoxLayout(customTab);
+         layout->addWidget(ui->graphicsViewGrade, 0, Qt::AlignCenter);
+         customTab->setLayout(layout);
+         qDebug() << "setupCustomTabLayout: created new layout";
+     } else {
+         addGraphicsViewToLayout(ui->graphicsViewGrade);
+     }
+ }
+
+ // 5.Добавление GraphicsView в существующий layout
+ void MainWindow::addGraphicsViewToLayout(QGraphicsView* graphicsView) {
+     QLayout* existingLayout = customTab->layout();
+     auto* hLayout = qobject_cast<QHBoxLayout*>(existingLayout);
+
+     if (hLayout) {
+         hLayout->addWidget(graphicsView, 0, Qt::AlignCenter);
+         qDebug() << "addGraphicsViewToLayout: added to existing layout";
+     } else {
+         qDebug() << "addGraphicsViewToLayout: layout is not QHBoxLayout";
+     }
+ }
+
+ // 6.Загрузка изображения из данных
+ bool MainWindow::loadImageFromData(const QByteArray& imageData, QImage& image) const {
+     return image.loadFromData(imageData);
+ }
+
+ // 7.Отображение изображения
+ void MainWindow::displayImageInGraphicsView(const QImage& image) {
+     if (!ui->graphicsViewGrade) return;
+
+     // Создаем новую сцену с parent = graphicsView (автоматическое удаление)
+     auto* scene = new QGraphicsScene(ui->graphicsViewGrade);
+     ui->graphicsViewGrade->setScene(scene);
+
+     // Добавляем изображение
+     scene->addPixmap(QPixmap::fromImage(image));
+
+     // Устанавливаем размер
+     ui->graphicsViewGrade->setFixedSize(image.width(), image.height());
+     ui->graphicsViewGrade->update();
+     ui->graphicsViewGrade->show();
+
+     qDebug() << "displayImageInGraphicsView: displayed image"
+              << image.width() << "x" << image.height();
+ }
  void MainWindow::onTestBreakClicked() {
      // Проверка основного UI
      if (!ui) {
@@ -2164,58 +2335,137 @@ void MainWindow::loadContentIntoBrowser(QTextBrowser* textBrowser,
     textBrowser->setHtml(fullHtml);
 }
 
-void MainWindow:: saveFiles(const QStringList& stringListFileName,
-                            const QList<QByteArray>& stringListImageData,
-                            const QString& dirName) {
-    if (stringListFileName.size() != stringListImageData.size()) {
-        qDebug() << "Error: The number of file names does not match the number of image data entries.";
+// void MainWindow:: saveFiles(const QStringList& stringListFileName,
+//                             const QList<QByteArray>& stringListImageData,
+//                             const QString& dirName) {
+//     if (stringListFileName.size() != stringListImageData.size()) {
+//         qDebug() << "Error: The number of file names does not match the number of image data entries.";
+//         return;
+//     }
+//     QDir dir(dirName);
+//     if (!dir.exists()) {
+//         if (!dir.mkpath(".")) {
+//             qDebug() << "Error: Failed to create directory:" << dirName;
+//             return;
+//         }
+//     }
+//     for (int i = 0; i < stringListFileName.size(); ++i) {
+//         QString fileName = stringListFileName[i];
+//         QByteArray imageData = stringListImageData[i];
+
+//         QString fullFilePath = dir.filePath(fileName);
+//         QFile file(fullFilePath);
+//         if (!file.open(QIODevice::WriteOnly)) {
+//             qDebug() << "Error: Failed to open file for writing:" << fullFilePath;
+//             continue;
+//         }
+
+//         qint64 bytesWritten = file.write(imageData);
+//         if (bytesWritten == -1) {
+//             qDebug() << "Error: Failed to write data to file:" << fullFilePath;
+//         } else {
+//             //qDebug() << "File saved successfully:" << fullFilePath;
+//         }
+
+//         file.close();
+//     }
+// }
+
+// Основная функция (Facade)
+void MainWindow::saveFiles(const QStringList& fileNames,
+                           const QList<QByteArray>& imageDataList,
+                           const QString& directoryPath) const {
+    validateUi();
+
+    // Проверка соответствия размеров
+    if (fileNames.size() != imageDataList.size()) {
+        qDebug() << "saveFiles: size mismatch - fileNames:" << fileNames.size()
+        << "imageData:" << imageDataList.size();
         return;
     }
-    QDir dir(dirName);
-    if (!dir.exists()) {
-        if (!dir.mkpath(".")) {
-            qDebug() << "Error: Failed to create directory:" << dirName;
-            return;
+
+    // Создание директории
+    if (!ensureDirectoryExists(directoryPath)) {
+        return;
+    }
+
+    // Сохранение файлов
+    int successCount = 0;
+    for (int i = 0; i < fileNames.size(); ++i) {
+        if (saveSingleFile(directoryPath, fileNames[i], imageDataList[i])) {
+            successCount++;
         }
     }
-    for (int i = 0; i < stringListFileName.size(); ++i) {
-        QString fileName = stringListFileName[i];
-        QByteArray imageData = stringListImageData[i];
 
-        QString fullFilePath = dir.filePath(fileName);
-        QFile file(fullFilePath);
-        if (!file.open(QIODevice::WriteOnly)) {
-            qDebug() << "Error: Failed to open file for writing:" << fullFilePath;
-            continue;
-        }
+    qDebug() << "saveFiles: saved" << successCount << "of" << fileNames.size() << "files";
+}
 
-        qint64 bytesWritten = file.write(imageData);
-        if (bytesWritten == -1) {
-            qDebug() << "Error: Failed to write data to file:" << fullFilePath;
-        } else {
-            //qDebug() << "File saved successfully:" << fullFilePath;
-        }
+// 1. Обеспечение существования директории
+bool MainWindow::ensureDirectoryExists(const QString& dirPath) const {
+    QDir dir(dirPath);
 
-        file.close();
+    if (dir.exists()) {
+        return true;
+    }
+
+    if (dir.mkpath(dirPath)) {
+        qDebug() << "ensureDirectoryExists: created directory" << dirPath;
+        return true;
+    } else {
+        qDebug() << "ensureDirectoryExists: failed to create directory" << dirPath;
+        return false;
     }
 }
 
-// void MainWindow::delFileDir(QString path){
-//     QDir dir(path);
-//     if (dir.exists()) {
-//         QStringList files = dir.entryList(QDir::Files);
+// 2.Сохранение одного файла
+bool MainWindow::saveSingleFile(const QString& directoryPath,
+                                const QString& fileName,
+                                const QByteArray& imageData) const {
+    // Формируем полный путь
+    const QString fullFilePath = QDir(directoryPath).filePath(fileName);
 
-//         foreach (const QString &file, files) {
-//             if (dir.remove(file)) {
-//                 //qDebug() << "Удален файл:" << file;
-//             } else {
-//                 qDebug() << "Не удалось удалить файл:" << file;
-//             }
-//         }
-//     } else {
-//         qDebug() << "Папка не найдена:" << path;
-//     }
-// }
+    // Открываем файл
+    QFile file(fullFilePath);
+    if (!file.open(QIODevice::WriteOnly)) {
+        qDebug() << "saveSingleFile: failed to open" << fullFilePath;
+        return false;
+    }
+
+    // Записываем данные
+    const qint64 bytesWritten = file.write(imageData);
+    if (bytesWritten == -1) {
+        qDebug() << "saveSingleFile: failed to write to" << fullFilePath;
+        file.close();
+        return false;
+    }
+
+    // Закрываем файл (close() возвращает void, не проверяем)
+    file.close();
+
+    qDebug() << "saveSingleFile: saved" << fileName << "(" << bytesWritten << "bytes)";
+    return true;
+}
+
+// 3.Валидация данных файла
+bool MainWindow::isValidFileData(const QString& fileName, const QByteArray& data) const {
+    if (fileName.isEmpty()) {
+        qDebug() << "isValidFileData: empty file name";
+        return false;
+    }
+
+    if (data.isEmpty()) {
+        qDebug() << "isValidFileData: empty data for file" << fileName;
+        return false;
+    }
+
+    return true;
+}
+
+// 4.Логирование ошибок
+void MainWindow::logFileError(const QString& error, const QString& filePath) const {
+    qDebug() << "saveFiles Error:" << error << "-" << filePath;
+}
+
 
 void MainWindow::clearDirectory(const QString path) {
     // Проверка пустого пути
